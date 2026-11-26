@@ -1,0 +1,9 @@
+Przeczytaj dokładnie plik AGENTS.md oraz zapoznaj się ze wszystkimi plikami w katalogu hollow_star_os_basic/.
+
+Twoje pierwsze zadanie:
+1. Uruchom `./pico.sh build` i sprawdź, czy projekt kompiluje się bez błędów, a także podaj dokładne aktualne zużycie pamięci Flash i RAM z podsumowania kompilatora.
+2. Przeanalizuj kod pod kątem ograniczeń z AGENTS.md (izolacja nagłówków TinyUSB i BTstack, przypięcie wątków do Core 0/1, użycie arduino-libhelix zamiast BackgroundAudio, brak zaokrągleń w UI).
+3. Zaproponuj plan bezpiecznego refaktoringu głównego pliku .ino (przeniesienie gier i osobnych aplikacji do podfolderu hollow_star_os_basic/src/) oraz wskaż miejsca, gdzie możemy odzyskać najwięcej pamięci RAM i Flash przed dodawaniem nowych funkcji.
+
+Na razie nic nie wgrywaj na płytkę i nie modyfikuj plików — przedstaw najpierw wyniki kompilacji i plan.
+

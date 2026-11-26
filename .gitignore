@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+._*
+
+# Arduino / build artifacts
+build/
+*.bin
+*.elf
+*.hex
+*.uf2
+*.map
+*.dis
+
+# Edytory i narzędzia lokalne
+.vscode/
+*.log
+

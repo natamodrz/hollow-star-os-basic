@@ -1,0 +1,30 @@
+hollow-star-os-basic/                # Główny folder repozytorium (otwierasz go w Antigravity)
+├── AGENTS.md                        # Stały kontekst projektu dla Google Antigravity
+├── README.md                        # Opis projektu, skróty klawiszowe, status funkcji
+├── .gitignore                       # Ignoruje pliki tymczasowe kompilacji i macOS
+├── pico.sh                          # Skrypt: build / upload / flash / monitor / logs
+├── docs/
+│   └── wiring.md                    # Schemat podłączenia pinów (ST7565, SD, USB 2.4 GHz)
+└── hollow_star_os_basic/            # Folder szkicu Arduino (otwierany też przez Arduino IDE)
+    ├── hollow_star_os_basic.ino     # Wątek UI (Core 0), routing ekranów, suspend, Core 1 USB loop
+    ├── usb_kbd.h / .cpp             # Klawiatura USB Host na PIO (Core 1, izolacja TinyUSB)
+    ├── storage_cfg.h / .cpp         # LittleFS, karta SD (SPI1), /config.cfg, formatowanie
+    ├── bt_audio.h / .cpp            # Wątek Audio/BT (A2DP + arduino-libhelix + poprawiony run-loop)
+    ├── net_ftp.h / .cpp             # Wątek sieciowy (Wi-Fi + RSSI, NTP, serwer FTP)
+    └── src/                         # Moduły UI, aplikacji i gier
+        ├── os/
+        │   ├── app_types.h          # Stany AppState, tryby modali, deskryptor AppScreen
+        │   ├── ui_common.h / .cpp   # Wspólny scratch RAM, pasek stanu (Wi-Fi/BT/USB), branding, zegar, modale
+        │   └── ui_menus.h / .cpp    # Menu główne (2 karty) oraz podmenu Gry, Narzędzia, Ustawienia
+        ├── apps/
+        │   ├── app_temp.h / .cpp    # Termometr wewnętrzny RP2040
+        │   ├── app_calc.h / .cpp    # Kalkulator
+        │   ├── app_notes.h / .cpp   # Notatnik i podgląd Markdown (.md)
+        │   ├── app_files.h / .cpp   # Eksplorator plików (Flash / SD)
+        │   ├── app_music.h / .cpp   # Odtwarzacz MP3 (SD -> BT A2DP)
+        │   ├── app_ftp.h / .cpp     # Interfejs serwera FTP
+        │   └── app_settings.h / .cpp# BT, Wi-Fi/NTP, Kontrast, Czas, Formatowanie, About (z wolnym RAM)
+        └── games/
+            ├── game_brick.h / .cpp  # Brick Breaker
+            ├── game_tetris.h / .cpp # Tetris
+            └── game_racing.h / .cpp # Wyścigi (Brick Game)
