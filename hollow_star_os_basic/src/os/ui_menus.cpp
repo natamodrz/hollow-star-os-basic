@@ -247,7 +247,7 @@ static void mainDraw() {
   }
 
   rysujToastJesliAktywny();
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
 static bool mainKey(uint8_t k) {
@@ -306,7 +306,7 @@ static void gamesDraw() {
     drawTile(3 + i * 42, 16, 38, 28, i == wybranaGry, rysujIkoneGry, i);
   }
   drawMenuFooter(GAMES_NAMES[wybranaGry], true);
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
 static bool gamesKey(uint8_t k) {
@@ -331,7 +331,7 @@ static void toolsDraw() {
   }
   drawMenuFooter(TOOLS_NAMES[wybranaNar], true);
   rysujToastJesliAktywny();
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
 static bool toolsKey(uint8_t k) {
@@ -360,7 +360,7 @@ static void settingsDraw() {
     drawTile(3 + col * 42, 11 + row * 21, 38, 19, i == wybranaUst, rysujIkoneUst, i);
   }
   drawMenuFooter(SETTINGS_NAMES[wybranaUst], true);
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
 static bool settingsKey(uint8_t k) {
@@ -385,7 +385,32 @@ static bool settingsKey(uint8_t k) {
   return true;
 }
 
-const AppScreen screenMainMenu     = { nullptr, nullptr, mainKey,     mainDraw };
-const AppScreen screenGamesMenu    = { nullptr, nullptr, gamesKey,    gamesDraw };
-const AppScreen screenToolsMenu    = { nullptr, nullptr, toolsKey,    toolsDraw };
-const AppScreen screenSettingsMenu = { nullptr, nullptr, settingsKey, settingsDraw };
+static const char* const HELP_MAIN[] = {
+  "</>/^/v: Wybor aplikacji",
+  "Tab: Strona 1 / 2",
+  "Ent/Spc: Otworz",
+  "F1: Skroty klawiszowe"
+};
+static const char* const HELP_GAMES[] = {
+  "</>: Wybor gry",
+  "Ent/Spc: Uruchom gre",
+  "Esc: Menu glowne",
+  "F1: Skroty klawiszowe"
+};
+static const char* const HELP_TOOLS[] = {
+  "</>: Wybor narzedzia",
+  "Ent/Spc: Uruchom",
+  "Esc: Menu glowne",
+  "F1: Skroty klawiszowe"
+};
+static const char* const HELP_SETTINGS[] = {
+  "</>/^/v: Wybor opcji",
+  "Ent/Spc: Otworz",
+  "Esc: Menu glowne",
+  "F1: Skroty klawiszowe"
+};
+
+const AppScreen screenMainMenu     = { nullptr, nullptr, mainKey,     mainDraw,     HELP_MAIN,     4 };
+const AppScreen screenGamesMenu    = { nullptr, nullptr, gamesKey,    gamesDraw,    HELP_GAMES,    4 };
+const AppScreen screenToolsMenu    = { nullptr, nullptr, toolsKey,    toolsDraw,    HELP_TOOLS,    4 };
+const AppScreen screenSettingsMenu = { nullptr, nullptr, settingsKey, settingsDraw, HELP_SETTINGS, 4 };

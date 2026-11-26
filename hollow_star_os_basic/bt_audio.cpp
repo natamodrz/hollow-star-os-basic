@@ -404,9 +404,9 @@ static void internalMusicStop() {
   markDirty();
 }
 
-static void internalScanSD() {
+static void internalScanSD(bool forceRemount) {
   internalMusicStop();
-  bool ok = storageMountSD();
+  bool ok = (sdMounted && !forceRemount) ? true : storageMountSD();
 
   xSemaphoreTake(stateMutex, portMAX_DELAY);
   sharedState.sdReady = ok;
@@ -421,33 +421,27 @@ static void internalScanSD() {
 
   Serial.println("[SD] Skanowanie katalogu / :");
   fsLock();
-  File dir = SD.open("/", FILE_READ);
-  if (dir && dir.isDirectory()) {
-    while (true) {
-      File entry = dir.openNextFile();
-      if (!entry) break;
-      const char* bn = baseNamePtr(entry.name());
-      bool isDir = entry.isDirectory();
-      unsigned long sz = isDir ? 0UL : (unsigned long)entry.size();
+  Dir dir = SDFS.openDir("/");
+  while (dir.next()) {
+    const char* bn = baseNamePtr(dir.fileName().c_str());
+    bool isDir = dir.isDirectory();
+    unsigned long sz = isDir ? 0UL : (unsigned long)dir.fileSize();
 
-      char nameCopy[TRACK_NAME_LEN];
-      strncpy(nameCopy, bn, sizeof(nameCopy) - 1);
-      nameCopy[sizeof(nameCopy) - 1] = '\0';
-      entry.close();
+    char nameCopy[TRACK_NAME_LEN];
+    strncpy(nameCopy, bn, sizeof(nameCopy) - 1);
+    nameCopy[sizeof(nameCopy) - 1] = '\0';
 
-      Serial.printf("  - '%s' (%s, %lu B)\n", nameCopy, isDir ? "DIR" : "FILE", sz);
+    Serial.printf("  - '%s' (%s, %lu B)\n", nameCopy, isDir ? "DIR" : "FILE", sz);
 
-      if (!isDir && nameCopy[0] != '\0' && nameCopy[0] != '.' && endsWithMp3(nameCopy)) {
-        xSemaphoreTake(stateMutex, portMAX_DELAY);
-        if (sharedState.trackCount < MAX_TRACKS) {
-          strncpy(trackNames[sharedState.trackCount], nameCopy, TRACK_NAME_LEN - 1);
-          trackNames[sharedState.trackCount][TRACK_NAME_LEN - 1] = '\0';
-          sharedState.trackCount++;
-        }
-        xSemaphoreGive(stateMutex);
+    if (!isDir && nameCopy[0] != '\0' && nameCopy[0] != '.' && endsWithMp3(nameCopy)) {
+      xSemaphoreTake(stateMutex, portMAX_DELAY);
+      if (sharedState.trackCount < MAX_TRACKS) {
+        strncpy(trackNames[sharedState.trackCount], nameCopy, TRACK_NAME_LEN - 1);
+        trackNames[sharedState.trackCount][TRACK_NAME_LEN - 1] = '\0';
+        sharedState.trackCount++;
       }
+      xSemaphoreGive(stateMutex);
     }
-    dir.close();
   }
   fsUnlock();
 
@@ -582,7 +576,7 @@ static void internalBtConnectIdx(int idx) {
 
 static void taskAudioBT(void *pvParams) {
   (void)pvParams;
-  internalScanSD();
+  internalScanSD(false);
   bool lastConn = false;
   unsigned long lastDbgMs = 0;
 
@@ -591,7 +585,7 @@ static void taskAudioBT(void *pvParams) {
     while (xQueueReceive(audioCmdQueue, &cmd, 0) == pdTRUE) {
       switch (cmd.type) {
         case ACMD_SCAN_SD:
-          internalScanSD();
+          internalScanSD(true);
           break;
         case ACMD_PLAY_TRACK:
           internalPlayTrack(cmd.arg);

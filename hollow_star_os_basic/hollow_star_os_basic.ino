@@ -54,6 +54,7 @@ static const AppScreen* const SCREENS[APP_STATE_COUNT] = {
 static_assert(sizeof(SCREENS) / sizeof(SCREENS[0]) == APP_STATE_COUNT, "SCREENS size mismatch");
 
 void uiSetScreen(AppState next) {
+  uiHelpClose();
   ekran = next;
   if (ekran < APP_STATE_COUNT && SCREENS[ekran] && SCREENS[ekran]->onEnter) {
     SCREENS[ekran]->onEnter();
@@ -141,16 +142,26 @@ void loop() {
   if (clockMinuteTicked()) needRedraw = true;
   if (toastUpdateExpiry(teraz)) needRedraw = true;
 
-  if (ekran < APP_STATE_COUNT && SCREENS[ekran] && SCREENS[ekran]->onTick) {
+  if (!uiHelpIsOpen() && ekran < APP_STATE_COUNT && SCREENS[ekran] && SCREENS[ekran]->onTick) {
     if (SCREENS[ekran]->onTick(teraz)) needRedraw = true;
   }
 
   uint8_t k;
   while (keyQueue != nullptr && xQueueReceive(keyQueue, &k, 0) == pdTRUE) {
+    needRedraw = true;
+    if (uiHelpIsOpen()) {
+      uiHelpHandleKey(k);
+      continue;
+    }
+    if (k == KEY_F1 && modalGetMode() == MODAL_NONE &&
+        ekran < APP_STATE_COUNT && SCREENS[ekran] &&
+        SCREENS[ekran]->helpLines && SCREENS[ekran]->helpCount > 0) {
+      uiHelpOpen(SCREENS[ekran]->helpLines, SCREENS[ekran]->helpCount);
+      continue;
+    }
     if (ekran < APP_STATE_COUNT && SCREENS[ekran] && SCREENS[ekran]->onKey) {
       SCREENS[ekran]->onKey(k);
     }
-    needRedraw = true;
     if (ekran == APP_SUSPEND) return;
   }
 

@@ -70,10 +70,11 @@ static bool spi1Configured = false;
 
 bool storageMountSD() {
   fsLock();
-  if (sdMounted) {
-    SD.end();
-    sdMounted = false;
-  }
+  SD.end(false);
+  sdMounted = false;
+
+  pinMode(SD_CS, OUTPUT);
+  digitalWrite(SD_CS, HIGH);
 
   if (!spi1Configured) {
     SPI1.setSCK(SD_SCK);
@@ -82,12 +83,32 @@ bool storageMountSD() {
     SPI1.begin();
     spi1Configured = true;
   }
+  gpio_pull_up(SD_MISO);
 
-  // Stabilna prędkość SPI dla przewodów stykowych i modułu Catalex
-  sdMounted = SD.begin(SD_CS, SPI_HALF_SPEED, SPI1);
+  // Wyślij min. 80 taktów zegara przy CS=HIGH, aby wybudzić kartę do trybu SPI
+  digitalWrite(SD_CS, HIGH);
+  SPI1.beginTransaction(SPISettings(400000, MSBFIRST, SPI_MODE0));
+  for (int i = 0; i < 10; i++) SPI1.transfer(0xFF);
+  SPI1.endTransaction();
+
+  // Próba z malejącą prędkością zegara dla przewodów stykowych i modułu Catalex
+  static const uint32_t speeds[] = {
+    SPI_HALF_SPEED,     // 4 MHz
+    SPI_QUARTER_SPEED,  // 2 MHz
+    SPI_EIGHTH_SPEED,   // 1 MHz
+    SD_SCK_HZ(400000)   // 400 kHz
+  };
+  for (size_t i = 0; i < sizeof(speeds) / sizeof(speeds[0]); i++) {
+    sdMounted = SD.begin(SD_CS, speeds[i], SPI1);
+    if (sdMounted) {
+      Serial.printf("[SD] Zamontowano OK (clk=%lu Hz)\n", (unsigned long)speeds[i]);
+      break;
+    }
+    SD.end(false);
+    delay(30);
+  }
   if (!sdMounted) {
-    delay(50);
-    sdMounted = SD.begin(SD_CS, SPI_QUARTER_SPEED, SPI1);
+    Serial.println("[SD] Blad montowania karty SD!");
   }
   fsUnlock();
   return sdMounted;
@@ -177,6 +198,7 @@ void storageInit() {
   if (!storageLoadConfig()) {
     storageSaveConfig();
   }
+  storageMountSD();
 }
 
 static String baseNameOf(const char* raw) {
@@ -193,22 +215,16 @@ int storageListDir(bool onSD, const char* dirPath, DirEntryInfo* out, int maxIte
 
   if (onSD) {
     if (sdMounted) {
-      File dir = SD.open(dirPath, FILE_READ);
-      if (dir && dir.isDirectory()) {
-        while (count < maxItems) {
-          File entry = dir.openNextFile();
-          if (!entry) break;
-          String bn = baseNameOf(entry.name());
-          if (bn.length() > 0 && bn != "." && bn != ".." && !bn.startsWith(".")) {
-            strncpy(out[count].name, bn.c_str(), sizeof(out[count].name) - 1);
-            out[count].name[sizeof(out[count].name) - 1] = '\0';
-            out[count].isDir = entry.isDirectory();
-            out[count].size  = entry.isDirectory() ? 0 : (uint32_t)entry.size();
-            count++;
-          }
-          entry.close();
+      Dir dir = SDFS.openDir(dirPath);
+      while (count < maxItems && dir.next()) {
+        String bn = baseNameOf(dir.fileName().c_str());
+        if (bn.length() > 0 && bn != "." && bn != ".." && !bn.startsWith(".")) {
+          strncpy(out[count].name, bn.c_str(), sizeof(out[count].name) - 1);
+          out[count].name[sizeof(out[count].name) - 1] = '\0';
+          out[count].isDir = dir.isDirectory();
+          out[count].size  = dir.isDirectory() ? 0 : (uint32_t)dir.fileSize();
+          count++;
         }
-        dir.close();
       }
     }
   } else {
@@ -278,9 +294,15 @@ bool storageReadText(bool onSD, const char* path, char* out, size_t maxBytes) {
     return false;
   }
   size_t pos = 0;
-  while (f.available() && (pos + 1) < maxBytes) {
-    char c = (char)f.read();
-    if (c != '\r') out[pos++] = c;
+  uint8_t tmp[64];
+  while ((pos + 1) < maxBytes) {
+    size_t want = min(sizeof(tmp), maxBytes - 1 - pos);
+    int n = f.read(tmp, want);
+    if (n <= 0) break;
+    for (int i = 0; i < n && (pos + 1) < maxBytes; i++) {
+      char c = (char)tmp[i];
+      if (c != '\r') out[pos++] = c;
+    }
   }
   out[pos] = '\0';
   f.close();

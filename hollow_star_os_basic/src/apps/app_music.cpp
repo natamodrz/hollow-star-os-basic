@@ -26,14 +26,14 @@ static void musicDraw() {
 
   if (!audioSnap.sdReady) {
     d.drawStr(4, 24, "Brak karty SD (FAT32)!");
-    d.drawStr(4, 62, "[R] Odswiez  [Esc] Menu");
-    d.sendBuffer();
+    d.drawStr(4, 62, "R:Odsw  F1:Pom  Esc:M");
+    uiFinishFrame();
     return;
   }
   if (audioSnap.trackCount == 0) {
     d.drawStr(4, 24, "Brak plikow .mp3 na /");
-    d.drawStr(4, 62, "[R] Odswiez  [Esc] Menu");
-    d.sendBuffer();
+    d.drawStr(4, 62, "R:Odsw  F1:Pom  Esc:M");
+    uiFinishFrame();
     return;
   }
 
@@ -67,8 +67,17 @@ static void musicDraw() {
   const char* st = !audioSnap.btConnected ? "Brak BT!" :
                    (audioSnap.musicPlaying ? (audioSnap.musicPaused ? "PAUZA" : "GRA") : "STOP");
   d.drawStr(2, 62, st);
-  d.drawStr(46, 62, "Ent:G Spc:P S:St");
-  d.sendBuffer();
+  d.drawStr(40, 62, "Ent:G Spc:P F1:Pom");
+  uiFinishFrame();
 }
 
-const AppScreen screenAppMusic = { nullptr, nullptr, musicKey, musicDraw };
+static const char* const HELP_MUSIC[] = {
+  "^ / v: Wybor utworu",
+  "Enter: Odtwarzaj utwor",
+  "Spacja: Pauza / Wznow",
+  "S: Stop odtwarzania",
+  "R: Skanuj karte SD",
+  "Esc: Menu glowne"
+};
+
+const AppScreen screenAppMusic = { nullptr, nullptr, musicKey, musicDraw, HELP_MUSIC, 6 };

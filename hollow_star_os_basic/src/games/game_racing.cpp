@@ -168,7 +168,15 @@ static void racingDraw() {
   d.drawStr(56, 55, "</> Pas");
   d.drawStr(56, 63, "^ Turbo");
   if (rGameOver) rysujPopupKoniecGry("WYPADEK!");
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
-const AppScreen screenGameRacing = { racingEnter, racingTickCheck, racingKey, racingDraw };
+static const char* const HELP_RACING[] = {
+  "</>: Zmiana pasa",
+  "^ (trzymaj): Turbo",
+  "Ent/Spc: Nowa gra (koniec)",
+  "Esc: Menu gier",
+  "F1: Pauza i skroty"
+};
+
+const AppScreen screenGameRacing = { racingEnter, racingTickCheck, racingKey, racingDraw, HELP_RACING, 5 };

@@ -162,7 +162,15 @@ static void tetrisDraw() {
   d.drawStr(52, 53, "</> ^Obr");
   d.drawStr(52, 62, "vDol Spc:Z");
   if (tKoniec) rysujPopupKoniecGry("KONIEC GRY!");
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
-const AppScreen screenGameTetris = { tetrisEnter, tetrisTick, tetrisKey, tetrisDraw };
+static const char* const HELP_TETRIS[] = {
+  "</>: Przesun klocek",
+  "^: Obroc klocek",
+  "v: Przyspiesz opadanie",
+  "Spc/Ent: Zrzut natychm.",
+  "Esc: Menu gier | F1: Pom."
+};
+
+const AppScreen screenGameTetris = { tetrisEnter, tetrisTick, tetrisKey, tetrisDraw, HELP_TETRIS, 5 };

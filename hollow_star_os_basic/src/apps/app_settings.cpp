@@ -76,7 +76,7 @@ static void btDraw() {
       d.drawStr(2, y + 7, line);
     }
   }
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
 // --- Wi-Fi / NTP ---
@@ -164,7 +164,7 @@ static void wifiDraw() {
   }
 
   if (modalGetMode() != MODAL_NONE) rysujModal();
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
 // --- Kontrast ---
@@ -196,7 +196,7 @@ static void contrastDraw() {
   if (fillW > 0) d.drawBox(14, 30, fillW, 6);
   d.drawStr(44, 50, buf);
   d.setFont(u8g2_font_5x7_tr); d.drawStr(10, 62, "</> Zmien  Esc:Zapisz");
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
 // --- Czas ---
@@ -241,7 +241,7 @@ static void timeDraw() {
     d.drawFrame(72, 26, 24, 20); d.drawStr(74, 43, mBuf);
   }
   d.setFont(u8g2_font_5x7_tr); d.drawStr(6, 62, "</> Pole ^/v Zmien Esc:OK");
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
 // --- Formatowanie ---
@@ -296,7 +296,7 @@ static void formatDraw() {
 
   if (modalGetMode() != MODAL_NONE) rysujModal();
   rysujToastJesliAktywny();
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
 // --- About (branding + wolny RAM) ---
@@ -333,13 +333,49 @@ static void aboutDraw() {
   d.drawHLine(4, 32, 120);
   d.drawStr(4, 41, "BT A2DP | WiFi NTP | FTP");
   d.drawStr(4, 50, ramLine);
-  d.drawStr(34, 62, "[Esc] Powrot");
-  d.sendBuffer();
+  d.drawStr(14, 62, "Esc:Powrot  F1:Skroty");
+  uiFinishFrame();
 }
 
-const AppScreen screenSetBt       = { nullptr,    btTick,    btKey,       btDraw };
-const AppScreen screenSetWifi     = { nullptr,    wifiTick,  wifiKey,     wifiDraw };
-const AppScreen screenSetContrast = { nullptr,    nullptr,   contrastKey, contrastDraw };
-const AppScreen screenSetTime     = { timeEnter,  nullptr,   timeKey,     timeDraw };
-const AppScreen screenSetFormat   = { nullptr,    nullptr,   formatKey,   formatDraw };
-const AppScreen screenSetAbout    = { aboutEnter, aboutTick, aboutKey,    aboutDraw };
+static const char* const HELP_SET_BT[] = {
+  "^ / v: Wybor pozycji",
+  "Ent/Spc: Skanuj / Polacz",
+  "Esc: Menu ustawien",
+  "F1: Skroty klawiszowe"
+};
+static const char* const HELP_SET_WIFI[] = {
+  "^ / v: Wybor sieci/akcji",
+  "Ent/Spc: Skan / NTP / OK",
+  "Esc: Menu ustawien",
+  "F1: Skroty klawiszowe"
+};
+static const char* const HELP_SET_CONTRAST[] = {
+  "</v: Zmniejsz kontrast",
+  ">/ ^: Zwieksz kontrast",
+  "Ent/Esc: Zapisz i wroc",
+  "F1: Skroty klawiszowe"
+};
+static const char* const HELP_SET_TIME[] = {
+  "</>: Wybierz Godz / Min",
+  "^ / v: Zmien wartosc",
+  "Ent/Esc: Zatwierdz",
+  "F1: Skroty klawiszowe"
+};
+static const char* const HELP_SET_FORMAT[] = {
+  "^ / v: Wybierz Flash / SD",
+  "Ent/Spc: Formatuj (potw.)",
+  "Esc: Menu ustawien",
+  "F1: Skroty klawiszowe"
+};
+static const char* const HELP_SET_ABOUT[] = {
+  "Auto-odswiezanie RAM: 1s",
+  "Esc: Menu ustawien",
+  "F1: Skroty klawiszowe"
+};
+
+const AppScreen screenSetBt       = { nullptr,    btTick,    btKey,       btDraw,       HELP_SET_BT,       4 };
+const AppScreen screenSetWifi     = { nullptr,    wifiTick,  wifiKey,     wifiDraw,     HELP_SET_WIFI,     4 };
+const AppScreen screenSetContrast = { nullptr,    nullptr,   contrastKey, contrastDraw, HELP_SET_CONTRAST, 4 };
+const AppScreen screenSetTime     = { timeEnter,  nullptr,   timeKey,     timeDraw,     HELP_SET_TIME,     4 };
+const AppScreen screenSetFormat   = { nullptr,    nullptr,   formatKey,   formatDraw,   HELP_SET_FORMAT,   4 };
+const AppScreen screenSetAbout    = { aboutEnter, aboutTick, aboutKey,    aboutDraw,    HELP_SET_ABOUT,    3 };

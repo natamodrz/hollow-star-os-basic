@@ -38,8 +38,14 @@ static void tempDraw() {
   rysujPasekStanu();
   d.setFont(u8g2_font_6x10_tr);  d.drawStr(10, 21, "Temperatura RP2040");
   d.setFont(u8g2_font_10x20_tr); d.drawStr(28, 45, buf);
-  d.setFont(u8g2_font_5x7_tr);   d.drawStr(34, 62, "[Esc] Powrot");
-  d.sendBuffer();
+  d.setFont(u8g2_font_5x7_tr);   d.drawStr(14, 62, "Esc:Powrot  F1:Skroty");
+  uiFinishFrame();
 }
 
-const AppScreen screenAppTemp = { tempEnter, tempTick, tempKey, tempDraw };
+static const char* const HELP_TEMP[] = {
+  "Auto-odswiezanie: co 1 s",
+  "Esc: Powrot do menu",
+  "F1: Skroty klawiszowe"
+};
+
+const AppScreen screenAppTemp = { tempEnter, tempTick, tempKey, tempDraw, HELP_TEMP, 3 };

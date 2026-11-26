@@ -21,6 +21,13 @@ static bool hasExtCI(const char* name, const char* ext) {
   return strcasecmp(name + nl - el, ext) == 0;
 }
 
+static bool isTextEditable(const char* name) {
+  return hasExtCI(name, ".md")  || hasExtCI(name, ".txt") ||
+         hasExtCI(name, ".cfg") || hasExtCI(name, ".log") ||
+         hasExtCI(name, ".ini") || hasExtCI(name, ".csv") ||
+         hasExtCI(name, ".json");
+}
+
 void appFilesRefresh() {
   if (fmOnSD && !sdMounted) storageMountSD();
   fmCount = storageListDir(fmOnSD, fmPath, appScratch.files.items, MAX_DIR_ENTRIES);
@@ -81,8 +88,16 @@ static bool filesKey(uint8_t k) {
       fmSel = 0;
       appFilesRefresh();
     }
-  } else if (k == KEY_F1 || k == 'n' || k == 'N') {
+  } else if (k == KEY_F2 || k == 'n' || k == 'N') {
     modalOpenInput(MODAL_NEW_MD, "Nowy plik (.md):");
+  } else if (k == 'r' || k == 'R') {
+    if (fmOnSD) {
+      bool ok = storageMountSD();
+      showToast(ok ? "SD odswiezona!" : "Brak karty SD!");
+    } else {
+      showToast("Odswiezono Flash");
+    }
+    appFilesRefresh();
   } else if (k == KEY_DEL && fmCount > 0) {
     char title[26];
     snprintf(title, sizeof(title), "Usun: %.18s", appScratch.files.items[fmSel].name);
@@ -99,7 +114,7 @@ static bool filesKey(uint8_t k) {
         fmPath[sizeof(fmPath) - 1] = '\0';
         fmSel = 0;
         appFilesRefresh();
-      } else if (hasExtCI(item.name, ".md") || hasExtCI(item.name, ".txt") || hasExtCI(item.name, ".cfg")) {
+      } else if (isTextEditable(item.name)) {
         appNotesOpenFile(fmOnSD, full, APP_FILES, hasExtCI(item.name, ".md"));
       } else if (hasExtCI(item.name, ".mp3") && fmOnSD) {
         btAudioPlayPath(full);
@@ -147,11 +162,21 @@ static void filesDraw() {
   }
 
   d.drawHLine(0, 53, 128);
-  d.drawStr(2, 62, "Tab:Dysk F1:Nowy Del:Us");
+  d.drawStr(2, 62, "Tab:Dysk N:Nowy F1:Pom");
 
   if (modalGetMode() != MODAL_NONE) rysujModal();
   rysujToastJesliAktywny();
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
-const AppScreen screenAppFiles = { nullptr, nullptr, filesKey, filesDraw };
+static const char* const HELP_FILES[] = {
+  "^ / v: Wybor pliku/kat.",
+  "Enter: Otworz / Graj MP3",
+  "Tab: Zmien Flash / SD",
+  "N lub F2: Nowy plik .md",
+  "R: Odswiez / montuj SD",
+  "Del: Usun | Bksp: Wstecz",
+  "Esc: Menu glowne"
+};
+
+const AppScreen screenAppFiles = { nullptr, nullptr, filesKey, filesDraw, HELP_FILES, 7 };

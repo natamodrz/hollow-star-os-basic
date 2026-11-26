@@ -40,4 +40,6 @@ struct AppScreen {
   bool (*onTick)(unsigned long now);
   bool (*onKey)(uint8_t k);
   void (*onDraw)();
+  const char* const* helpLines;
+  uint8_t helpCount;
 };

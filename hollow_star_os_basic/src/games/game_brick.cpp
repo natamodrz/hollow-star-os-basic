@@ -133,7 +133,15 @@ static void brickDraw() {
   d.drawBox((int)bbBx, (int)bbBy, BB_BS, BB_BS);
   if (bbCzeka && !bbKoniec) d.drawStr(14, 50, "[Spacja] Start </>");
   if (bbKoniec) rysujPopupKoniecGry("KONIEC GRY!");
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
-const AppScreen screenGameBrick = { brickEnter, brickTick, brickKey, brickDraw };
+static const char* const HELP_BRICK[] = {
+  "</> (trzymaj): Paletka",
+  "Spc/Ent/^: Wypusc pilke",
+  "Ent/Spc: Nowa gra (koniec)",
+  "Esc: Menu gier",
+  "F1: Pauza i skroty"
+};
+
+const AppScreen screenGameBrick = { brickEnter, brickTick, brickKey, brickDraw, HELP_BRICK, 5 };

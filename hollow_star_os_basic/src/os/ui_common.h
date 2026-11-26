@@ -8,7 +8,7 @@
 
 #define OS_BRAND_NAME    "HOLLOW STAR OS"
 #define OS_BRAND_EDITION "BASIC"
-#define OS_BRAND_VERSION "v1.1"
+#define OS_BRAND_VERSION "v1.0.0"
 
 enum MdStyle : uint8_t {
   MD_NORMAL,
@@ -78,6 +78,13 @@ void modalOpenConfirm(ModalMode mode, const char* title);
 const char* modalGetInput();
 bool modalHandleKey(uint8_t k, bool &confirmedOut, bool &submittedOut);
 void rysujModal();
+
+// Uniwersalna pomoc skrótów klawiszowych (F1)
+bool uiHelpIsOpen();
+void uiHelpOpen(const char* const* lines, uint8_t count);
+void uiHelpClose();
+bool uiHelpHandleKey(uint8_t k);
+void uiFinishFrame();
 
 // Branding i wspólny pasek stanu (wyłącznie ostre kształty, brak zaokrągleń)
 void rysujHollowStar(int cx, int cy, bool smallIcon);

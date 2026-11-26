@@ -23,6 +23,12 @@ static ModalMode modalMode = MODAL_NONE;
 static char modalTitle[26] = {0};
 static char modalInput[64] = {0};
 
+// Uniwersalne okno skrótów klawiszowych pod F1
+static bool helpOpen = false;
+static const char* const* helpLinesPtr = nullptr;
+static uint8_t helpLinesCount = 0;
+static uint8_t helpScroll = 0;
+
 void uiAttachDisplay(U8G2 *disp) {
   gDisp = disp;
 }
@@ -259,4 +265,62 @@ void rysujPopupKoniecGry(const char* title) {
   d.setFont(u8g2_font_5x7_tr);
   d.drawStr(36, 34, title);
   d.drawStr(18, 45, "Ent:Gra Esc:Menu");
+}
+
+bool uiHelpIsOpen() { return helpOpen; }
+
+void uiHelpOpen(const char* const* lines, uint8_t count) {
+  if (!lines || count == 0) return;
+  helpLinesPtr = lines;
+  helpLinesCount = count;
+  helpScroll = 0;
+  helpOpen = true;
+}
+
+void uiHelpClose() {
+  helpOpen = false;
+}
+
+bool uiHelpHandleKey(uint8_t k) {
+  if (!helpOpen) return false;
+  if (k == KEY_ESC || k == KEY_F1 || k == '\n' || k == ' ') {
+    helpOpen = false;
+    return true;
+  }
+  int maxScroll = (helpLinesCount > 4) ? (helpLinesCount - 4) : 0;
+  if (k == KEY_UP && helpScroll > 0) helpScroll--;
+  else if (k == KEY_DOWN && helpScroll < maxScroll) helpScroll++;
+  return true;
+}
+
+static void rysujHelpOverlay() {
+  if (!helpOpen || !helpLinesPtr) return;
+  U8G2 &d = uiDisplay();
+  d.setDrawColor(0);
+  d.drawBox(2, 11, 124, 52);
+  d.setDrawColor(1);
+  d.drawFrame(2, 11, 124, 52);
+  d.setFont(u8g2_font_5x7_tr);
+
+  char hdr[24];
+  if (helpLinesCount > 4) {
+    int maxScroll = helpLinesCount - 4;
+    snprintf(hdr, sizeof(hdr), "SKROTY [F1] %d/%d", (int)helpScroll + 1, maxScroll + 1);
+  } else {
+    snprintf(hdr, sizeof(hdr), "SKROTY [F1]");
+  }
+  d.drawStr(5, 19, hdr);
+  d.drawHLine(4, 21, 120);
+
+  for (int i = 0; i < 4 && (helpScroll + i) < helpLinesCount; i++) {
+    d.drawStr(5, 30 + i * 8, helpLinesPtr[helpScroll + i]);
+  }
+
+  d.drawHLine(4, 54, 120);
+  d.drawStr(5, 61, (helpLinesCount > 4) ? "^/v:Przewin  Esc/F1:OK" : "Esc / F1 / Ent: Zamknij");
+}
+
+void uiFinishFrame() {
+  if (helpOpen) rysujHelpOverlay();
+  uiDisplay().sendBuffer();
 }

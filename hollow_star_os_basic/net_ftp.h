@@ -33,7 +33,8 @@ enum NetCmdType : uint8_t {
   NCMD_WIFI_DISCONNECT,
   NCMD_NTP_SYNC,
   NCMD_FTP_START,   // arg: 0 = Flash (LittleFS), 1 = SD
-  NCMD_FTP_STOP
+  NCMD_FTP_STOP,
+  NCMD_FTP_SET_DRIVE // arg: 0 = Flash (LittleFS), 1 = SD
 };
 
 void netFtpStartTask();

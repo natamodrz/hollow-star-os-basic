@@ -179,7 +179,10 @@ static void ftpStart(bool useSD) {
     setFtpStatus("Najpierw polacz Wi-Fi");
     return;
   }
-  if (useSD && !sdMounted) storageMountSD();
+  if (useSD && !sdMounted && !storageMountSD()) {
+    setFtpStatus("Blad montowania SD!");
+    return;
+  }
   ftpOnSD = useSD;
   ftpCwd = "/";
   ftpCmdLine = "";
@@ -190,7 +193,26 @@ static void ftpStart(bool useSD) {
   xSemaphoreTake(netMutex, portMAX_DELAY);
   netState.ftpRunning = true;
   netState.ftpUseSD = useSD;
-  strncpy(netState.ftpStatus, "Dziala (port 21)", sizeof(netState.ftpStatus) - 1);
+  strncpy(netState.ftpStatus, useSD ? "Dziala (SD :21)" : "Dziala (FL :21)", sizeof(netState.ftpStatus) - 1);
+  xSemaphoreGive(netMutex);
+  markNetDirty();
+}
+
+static void ftpSetDrive(bool useSD) {
+  if (useSD && !sdMounted && !storageMountSD()) {
+    setFtpStatus("Blad montowania SD!");
+    return;
+  }
+  if (ftpCtrlCli) ftpCtrlCli.stop();
+  ftpOnSD = useSD;
+  ftpCwd = "/";
+  ftpCmdLine = "";
+
+  xSemaphoreTake(netMutex, portMAX_DELAY);
+  netState.ftpUseSD = useSD;
+  if (ftpActive) {
+    strncpy(netState.ftpStatus, useSD ? "Dziala (SD :21)" : "Dziala (FL :21)", sizeof(netState.ftpStatus) - 1);
+  }
   xSemaphoreGive(netMutex);
   markNetDirty();
 }
@@ -434,6 +456,9 @@ static void taskNet(void *pvParams) {
           break;
         case NCMD_FTP_STOP:
           ftpStop();
+          break;
+        case NCMD_FTP_SET_DRIVE:
+          ftpSetDrive(cmd.arg != 0);
           break;
       }
     }

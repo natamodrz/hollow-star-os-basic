@@ -100,7 +100,7 @@ static bool notesKey(uint8_t k) {
     if (noteReturnApp == APP_FILES) appFilesRefresh();
     return true;
   }
-  if (k == KEY_F1 || k == KEY_CTRL_S) {
+  if (k == KEY_F3 || k == KEY_CTRL_S) {
     bool ok = storageWriteText(noteOnSD, notePath, appScratch.notes.buf);
     showToast(ok ? "Zapisano plik!" : "Blad zapisu!");
     return true;
@@ -165,7 +165,7 @@ static void notesDraw() {
       y += 10;
     }
     d.drawHLine(0, 53, 128);
-    d.drawStr(2, 62, "MD:Podg Tab:Edyt ^/v");
+    d.drawStr(2, 62, "MD:Podg Tab:Edyt F1:Pom");
   } else {
     // Ostatnie 4 zawinięte wiersze w małym buforze na stosie (bez String w .bss)
     char lines[4][26];
@@ -202,11 +202,21 @@ static void notesDraw() {
       y += 10;
     }
     d.drawHLine(0, 53, 128);
-    d.drawStr(2, 62, "F1:Zap Tab:MD Esc:Wyj");
+    d.drawStr(2, 62, "^S/F3:Zap Tab:MD F1:Pom");
   }
 
   rysujToastJesliAktywny();
-  d.sendBuffer();
+  uiFinishFrame();
 }
 
-const AppScreen screenAppNotes = { nullptr, nullptr, notesKey, notesDraw };
+static const char* const HELP_NOTES[] = {
+  "Ctrl+S lub F3: Zapisz",
+  "Tab lub F2: Podglad MD",
+  "^ / v: Przewin (podglad)",
+  "Bksp: Usun znak",
+  "Del: Wyczysc cala tresc",
+  "Esc: Powrot",
+  "F1: Skroty klawiszowe"
+};
+
+const AppScreen screenAppNotes = { nullptr, nullptr, notesKey, notesDraw, HELP_NOTES, 7 };
