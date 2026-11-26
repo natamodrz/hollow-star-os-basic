@@ -1,13 +1,17 @@
 #include <Arduino.h>
 #include <SD.h>
-#include <BluetoothAudio.h>
+#include <PWMAudio.h>
+#include "src/os/app_types.h"
+#if HSOS_HAS_WIRELESS
+  #include <BluetoothAudio.h>
+  #include <lwip_wrap.h>
+  #include <pico/btstack_run_loop_async_context.h>
+#endif
 #include "MP3DecoderHelix.h"
 #include <FreeRTOS.h>
 #include <task.h>
 #include <queue.h>
 #include <semphr.h>
-#include <lwip_wrap.h>
-#include <pico/btstack_run_loop_async_context.h>
 #include <hardware/sync.h>
 #include <pico/time.h>
 #include "storage_cfg.h"
@@ -15,6 +19,14 @@
 
 using namespace libhelix;
 
+// =========================================================
+// Piny gniazda słuchawkowego PWM Stereo + Jack Detect
+// =========================================================
+static const int PWM_AUDIO_L     = 6; // GP6 (parzysty pin, PWM3 A = Lewy)
+static const int PWM_AUDIO_R     = 7; // GP7 (PWM3 B = Prawy)
+static const int JACK_DETECT_PIN = 8; // GP8 (INPUT_PULLUP, LOW = wpięty wtyk 3.5 mm)
+
+#if HSOS_HAS_WIRELESS
 // =========================================================
 // Naprawiony BTstack Run-Loop dla FreeRTOS SMP (bez burzy alarmów
 // i bez rekurencji stosu LWIP przy 5 ms timerze A2DP)
@@ -25,8 +37,8 @@ static SemaphoreHandle_t _btRunLoopExitBinary = nullptr;
 static __callback_req _btKickBuffer;
 static __callback_req _btTimeoutIRQBuffer;
 static __callback_req _btIrqKickBuffer;
-static bool _btKickPending = false;       // chronione przez cyw43_thread_enter()
-static volatile bool _btInWork = false;   // ustawiane wyłącznie na wątku LWIP
+static bool _btKickPending = false;
+static volatile bool _btInWork = false;
 static volatile bool _btTimeoutQueued = false;
 static volatile bool _btIrqKickQueued = false;
 static volatile alarm_id_t _btTimeoutAlarm = -1;
@@ -86,7 +98,6 @@ static void do_btstack_work_pending(void *data) {
     if (nextMs != 0) break;
   }
 
-  // Zawsze anuluj poprzedni alarm przed zaplanowaniem kolejnego
   uint32_t irq = save_and_disable_interrupts();
   if (_btTimeoutAlarm != -1) {
     cancel_alarm(_btTimeoutAlarm);
@@ -250,10 +261,22 @@ extern "C" const btstack_run_loop_t *__wrap_btstack_run_loop_async_context_get_i
   return &fixed_btstack_run_loop;
 }
 
-// =========================================================
-// Warstwa Audio A2DP + synchroniczny dekoder arduino-libhelix
-// =========================================================
 static A2DPSource a2dp;
+static bool btInitialized = false;
+static int16_t btStage[256];       // Ściśle 512 B (256 int16_t) -> omija błąd zawijania w A2DPSource::write()
+static size_t  btStageSamples = 0;
+static int16_t btSilence512[256] = {0};
+static int16_t resPrevL = 0;
+static int16_t resPrevR = 0;
+static uint32_t resPhaseQ16 = 0;
+#endif // HSOS_HAS_WIRELESS
+
+// =========================================================
+// Wyjście PWM Stereo (Headphone Jack) + wspólny stan audio
+// =========================================================
+static PWMAudio pwmAudio(PWM_AUDIO_L, true);
+static bool pwmRunning = false;
+static int  pwmRate = 44100;
 
 struct AudioCmd {
   AudioCmdType type;
@@ -264,25 +287,44 @@ static QueueHandle_t audioCmdQueue = nullptr;
 static SemaphoreHandle_t stateMutex = nullptr;
 static volatile bool audioDirty = true;
 static volatile bool stopDecodeFlag = false;
+static volatile uint8_t activeVolumePct = 75;
 
 static AudioUiSnapshot sharedState;
 static char trackNames[MAX_TRACKS][TRACK_NAME_LEN];
 static char requestedPath[128] = {0};
 
-static bool btInitialized = false;
 static File audioFile;
-static uint8_t mp3Buf[512];
-static int16_t silenceBuf[128] = {0};
+static uint8_t mp3Buf[2048];
+static AudioOutMode currentOutMode = AOUT_MODE_AUTO;
+static AudioActiveSink currentSink = ASINK_NONE;
+static bool debouncedJack = false;
+static bool lastRawJack = false;
+static unsigned long jackDebounceMs = 0;
 
-// Liczniki diagnostyczne (Serial Monitor 115200)
-static volatile uint32_t dbgReadBytes = 0;
-static volatile uint32_t dbgConsumed  = 0;
-static volatile uint32_t dbgFrames    = 0;
-static volatile uint32_t dbgPcmBytes  = 0;
-static volatile int dbgSampleRate     = 0;
-static volatile int dbgChannels       = 0;
+// Postęp odtwarzania
+static uint32_t playedFramesTotal = 0;
+static int      currentTrackRate  = 44100;
+static int      currentTrackKbps  = 0;
+static uint32_t currentFileSize   = 0;
+static uint32_t currentFilePos    = 0;
 
 static void markDirty() { __atomic_store_n(&audioDirty, true, __ATOMIC_RELEASE); }
+
+static uint16_t calcVolumeQ15(uint8_t volPct) {
+  if (volPct == 0) return 0;
+  if (volPct >= 100) return 32768;
+  uint32_t v = volPct;
+  uint32_t q15 = (v * v * 32768UL) / 10000UL;
+  if (q15 == 0) q15 = 128;
+  return (uint16_t)min((uint32_t)32768, q15);
+}
+
+static inline int16_t applyVolumeQ15(int32_t s, uint16_t q15) {
+  int32_t out = (s * (int32_t)q15) >> 15;
+  if (out > 32767) return 32767;
+  if (out < -32768) return -32768;
+  return (int16_t)out;
+}
 
 static void setBtStatus(const char* txt) {
   xSemaphoreTake(stateMutex, portMAX_DELAY);
@@ -304,80 +346,185 @@ static bool endsWithMp3(const char* name) {
   return strcasecmp(name + len - 4, ".mp3") == 0;
 }
 
-static void writePcmToA2DP(const int16_t *pcmStereo, size_t totalBytes) {
-  const uint8_t *ptr = (const uint8_t *)pcmStereo;
-  size_t sent = 0;
+static void pwmStopOutput() {
+  if (pwmRunning) {
+    pwmAudio.end();
+    pwmRunning = false;
+  }
+  pinMode(PWM_AUDIO_L, INPUT);
+  pinMode(PWM_AUDIO_R, INPUT);
+}
 
-  while (sent < totalBytes) {
-    if (stopDecodeFlag || !btInitialized || !a2dp.connected()) {
+static bool pwmEnsureStarted(int sampleRate) {
+  if (sampleRate < 8000 || sampleRate > 48000) sampleRate = 44100;
+  if (!pwmRunning) {
+    pwmAudio.setPin(PWM_AUDIO_L);
+    pwmAudio.setStereo(true);
+    pwmAudio.setBuffers(12, 256); // 3072 próbki stereo (~70 ms przy 44.1 kHz)
+    pwmAudio.setPWMFrequency(62500);
+    pwmAudio.setFrequency(sampleRate);
+    pwmRunning = pwmAudio.begin();
+    pwmRate = sampleRate;
+  } else if (pwmRate != sampleRate) {
+    pwmAudio.setFrequency(sampleRate);
+    pwmRate = sampleRate;
+  }
+  return pwmRunning;
+}
+
+static bool sinkReadyForAudio() {
+  if (currentSink == ASINK_JACK) return true;
+#if HSOS_HAS_WIRELESS
+  if (currentSink == ASINK_BT) return btInitialized && a2dp.connected();
+#endif
+  return false;
+}
+
+static bool sinkNeedsData() {
+  if (currentSink == ASINK_JACK) {
+    return !pwmRunning || (pwmAudio.availableForWrite() >= 1024);
+  }
+#if HSOS_HAS_WIRELESS
+  if (currentSink == ASINK_BT && btInitialized && a2dp.connected()) {
+    return a2dp.availableForWrite() >= 2048;
+  }
+#endif
+  return false;
+}
+
+#if HSOS_HAS_WIRELESS
+static void pushBtStereo(int16_t l, int16_t r) {
+  btStage[btStageSamples++] = l;
+  btStage[btStageSamples++] = r;
+  if (btStageSamples < 256) return;
+
+  while (!stopDecodeFlag && btInitialized && a2dp.connected() && currentSink == ASINK_BT) {
+    if (a2dp.availableForWrite() >= 512) {
+      a2dp.write((const uint8_t *)btStage, 512);
+      btStageSamples = 0;
       return;
     }
+    if (uxQueueMessagesWaiting(audioCmdQueue) > 0) return;
+    vTaskDelay(pdMS_TO_TICKS(2));
+  }
+  btStageSamples = 0;
+}
+#endif
 
-    int avail = a2dp.availableForWrite();
-    if (avail >= 4) {
-      size_t remain = totalBytes - sent;
-      size_t chunk = (size_t)avail;
-      if (chunk > remain) chunk = remain;
-      chunk &= ~((size_t)3); // pełne ramki stereo (4 bajty = L+R)
-
-      if (chunk > 0) {
-        size_t w = a2dp.write(ptr + sent, chunk);
-        sent += w;
-        dbgPcmBytes += w;
-        if (w == 0) vTaskDelay(pdMS_TO_TICKS(2));
-      } else {
-        vTaskDelay(pdMS_TO_TICKS(2));
+static void writeStereoToPwm(const int16_t *pcm, size_t stereoFrames, int sampleRate, uint16_t gainQ15) {
+  if (!pwmEnsureStarted(sampleRate)) return;
+  size_t idx = 0;
+  while (idx < stereoFrames && !stopDecodeFlag && currentSink == ASINK_JACK) {
+    int availBytes = pwmAudio.availableForWrite();
+    size_t availFrames = (availBytes >= 4) ? (size_t)(availBytes / 4) : 0;
+    if (availFrames > 0) {
+      size_t n = min(availFrames, stereoFrames - idx);
+      for (size_t i = 0; i < n; i++) {
+        int16_t l = applyVolumeQ15(pcm[(idx + i) * 2], gainQ15);
+        int16_t r = applyVolumeQ15(pcm[(idx + i) * 2 + 1], gainQ15);
+        pwmAudio.write(l, false);
+        pwmAudio.write(r, false);
       }
+      idx += n;
     } else {
       if (uxQueueMessagesWaiting(audioCmdQueue) > 0) return;
-      vTaskDelay(pdMS_TO_TICKS(2));
+      vTaskDelay(pdMS_TO_TICKS(1));
     }
   }
 }
 
-// Callback dekodera Helix — skaluje w miejscu bez bufora 4.6 KB!
-static void pcmCallback(MP3FrameInfo &info, short *pcm_buffer, size_t len, void *ref) {
-  (void)ref;
-  dbgFrames++;
-  dbgSampleRate = info.samprate;
-  dbgChannels   = info.nChans;
-
-  if (stopDecodeFlag || !btInitialized || !a2dp.connected() || len == 0) return;
-
-  if (info.nChans == 2) {
-    for (size_t i = 0; i < len; i++) {
-      pcm_buffer[i] = (short)(((int32_t)pcm_buffer[i] * 3) / 4);
-    }
-    writePcmToA2DP((const int16_t *)pcm_buffer, len * sizeof(int16_t));
-  } else {
-    // Mono -> stereo porcjami po 128 próbek (tylko 512 B na stosie)
-    int16_t stereoChunk[256];
-    size_t idx = 0;
-    while (idx < len && !stopDecodeFlag) {
-      size_t n = min((size_t)128, len - idx);
+static void writeMonoToPwm(const int16_t *pcmMono, size_t frames, int sampleRate, uint16_t gainQ15) {
+  if (!pwmEnsureStarted(sampleRate)) return;
+  size_t idx = 0;
+  while (idx < frames && !stopDecodeFlag && currentSink == ASINK_JACK) {
+    int availBytes = pwmAudio.availableForWrite();
+    size_t availFrames = (availBytes >= 4) ? (size_t)(availBytes / 4) : 0;
+    if (availFrames > 0) {
+      size_t n = min(availFrames, frames - idx);
       for (size_t i = 0; i < n; i++) {
-        int16_t s = (int16_t)(((int32_t)pcm_buffer[idx + i] * 3) / 4);
-        stereoChunk[i * 2]     = s;
-        stereoChunk[i * 2 + 1] = s;
+        int16_t s = applyVolumeQ15(pcmMono[idx + i], gainQ15);
+        pwmAudio.write(s, false);
+        pwmAudio.write(s, false);
       }
-      writePcmToA2DP(stereoChunk, n * 2 * sizeof(int16_t));
       idx += n;
+    } else {
+      if (uxQueueMessagesWaiting(audioCmdQueue) > 0) return;
+      vTaskDelay(pdMS_TO_TICKS(1));
     }
   }
+}
+
+static void pcmCallback(MP3FrameInfo &info, short *pcm_buffer, size_t len, void *ref) {
+  (void)ref;
+  if (stopDecodeFlag || len == 0 || info.samprate <= 0) return;
+
+  size_t frames = (info.nChans == 2) ? (len / 2) : len;
+  playedFramesTotal += (uint32_t)frames;
+  currentTrackRate = info.samprate;
+  if (info.bitrate > 0) currentTrackKbps = info.bitrate / 1000;
+
+  uint16_t gainQ15 = calcVolumeQ15(activeVolumePct);
+
+  if (currentSink == ASINK_JACK) {
+    if (info.nChans == 2) {
+      writeStereoToPwm((const int16_t *)pcm_buffer, frames, info.samprate, gainQ15);
+    } else {
+      writeMonoToPwm((const int16_t *)pcm_buffer, frames, info.samprate, gainQ15);
+    }
+    return;
+  }
+
+#if HSOS_HAS_WIRELESS
+  if (currentSink == ASINK_BT && btInitialized && a2dp.connected()) {
+    if (info.samprate == 44100) {
+      if (info.nChans == 2) {
+        for (size_t i = 0; i < frames && !stopDecodeFlag && currentSink == ASINK_BT; i++) {
+          int16_t l = applyVolumeQ15(pcm_buffer[i * 2], gainQ15);
+          int16_t r = applyVolumeQ15(pcm_buffer[i * 2 + 1], gainQ15);
+          pushBtStereo(l, r);
+        }
+      } else {
+        for (size_t i = 0; i < frames && !stopDecodeFlag && currentSink == ASINK_BT; i++) {
+          int16_t s = applyVolumeQ15(pcm_buffer[i], gainQ15);
+          pushBtStereo(s, s);
+        }
+      }
+    } else {
+      // Prosty resampler liniowy do 44100 Hz wymaganego przez A2DP SBC
+      uint32_t stepQ16 = (uint32_t)(((uint64_t)info.samprate << 16) / 44100ULL);
+      if (stepQ16 == 0) stepQ16 = 65536UL;
+      for (size_t i = 0; i < frames && !stopDecodeFlag && currentSink == ASINK_BT; i++) {
+        int16_t curL = applyVolumeQ15(info.nChans == 2 ? pcm_buffer[i * 2] : pcm_buffer[i], gainQ15);
+        int16_t curR = applyVolumeQ15(info.nChans == 2 ? pcm_buffer[i * 2 + 1] : pcm_buffer[i], gainQ15);
+        while (resPhaseQ16 < 65536UL && !stopDecodeFlag && currentSink == ASINK_BT) {
+          int32_t frac = (int32_t)(resPhaseQ16 & 0xFFFFUL);
+          int16_t outL = (int16_t)(resPrevL + (((int32_t)(curL - resPrevL) * frac) >> 16));
+          int16_t outR = (int16_t)(resPrevR + (((int32_t)(curR - resPrevR) * frac) >> 16));
+          pushBtStereo(outL, outR);
+          resPhaseQ16 += stepQ16;
+        }
+        resPhaseQ16 -= 65536UL;
+        resPrevL = curL;
+        resPrevR = curR;
+      }
+    }
+  }
+#endif
 }
 
 static MP3DecoderHelix mp3dec(pcmCallback);
 
+#if HSOS_HAS_WIRELESS
 static void btEnsureInit() {
   if (!btInitialized) {
     setBtStatus("Init BT...");
     Serial.printf("[BT] Init start, freeHeap=%lu\n", (unsigned long)rp2040.getFreeHeap());
     a2dp.setName("HollowStar OS 00:00:00:00:00:00");
     a2dp.setFrequency(44100);
+    a2dp.setBufferSize(12288); // 24 KB (~139 ms bufora anty-przycięciowego)
     a2dp.begin();
     btInitialized = true;
 
-    // Poczekaj aż stos HCI przejdzie w stan WORKING przed pierwszym wywołaniem connect/scan
     unsigned long t0 = millis();
     while (hci_get_state() != HCI_STATE_WORKING && (millis() - t0 < 2500UL)) {
       vTaskDelay(pdMS_TO_TICKS(10));
@@ -386,20 +533,116 @@ static void btEnsureInit() {
     Serial.printf("[BT] Init done, freeHeap=%lu\n", (unsigned long)rp2040.getFreeHeap());
   }
 }
+#endif
+
+static AudioActiveSink computeTargetSink(bool jackNow, AudioOutMode mode) {
+#if HSOS_HAS_WIRELESS
+  if (mode == AOUT_MODE_JACK) return ASINK_JACK;
+  if (mode == AOUT_MODE_BT)   return ASINK_BT;
+  return jackNow ? ASINK_JACK : ASINK_BT;
+#else
+  if (mode == AOUT_MODE_JACK) return ASINK_JACK;
+  return jackNow ? ASINK_JACK : ASINK_NONE;
+#endif
+}
+
+static void syncAudioRouting(bool forceApply = false) {
+  AudioActiveSink nextSink = computeTargetSink(debouncedJack, currentOutMode);
+  if (!forceApply && nextSink == currentSink) return;
+
+  AudioActiveSink prevSink = currentSink;
+  currentSink = nextSink;
+
+#if HSOS_HAS_WIRELESS
+  bool jackBlocksBt = (currentSink == ASINK_JACK);
+  if (jackBlocksBt) {
+    if (btInitialized) {
+      if (a2dp.connected()) {
+        a2dp.disconnect();
+        vTaskDelay(pdMS_TO_TICKS(150));
+      }
+      {
+        BluetoothLock btLock;
+        gap_discoverable_control(0);
+        gap_connectable_control(0);
+      }
+    }
+    btStageSamples = 0;
+  } else {
+    pwmStopOutput();
+    if (btInitialized) {
+      BluetoothLock btLock;
+      gap_discoverable_control(1);
+      gap_connectable_control(1);
+    }
+  }
+#else
+  if (currentSink != ASINK_JACK) {
+    pwmStopOutput();
+  }
+#endif
+
+  if (prevSink == ASINK_JACK && currentSink != ASINK_JACK) {
+    // Wyjęto wtyk słuchawkowy podczas gry -> wstrzymaj odtwarzanie jeśli brak BT
+    xSemaphoreTake(stateMutex, portMAX_DELAY);
+    if (sharedState.musicPlaying && !sinkReadyForAudio()) {
+      sharedState.musicPaused = true;
+    }
+    xSemaphoreGive(stateMutex);
+    pwmStopOutput();
+  }
+
+  xSemaphoreTake(stateMutex, portMAX_DELAY);
+  sharedState.jackConnected = debouncedJack;
+  sharedState.outMode = currentOutMode;
+  sharedState.activeSink = currentSink;
+#if HSOS_HAS_WIRELESS
+  sharedState.btDisabledByJack = (currentSink == ASINK_JACK);
+  if (currentSink == ASINK_JACK) {
+    sharedState.btConnected = false;
+    sharedState.btScanning = false;
+    strncpy(sharedState.btStatus, "Wylaczony (Jack)", sizeof(sharedState.btStatus) - 1);
+  } else {
+    bool c = btInitialized && a2dp.connected();
+    sharedState.btConnected = c;
+    strncpy(sharedState.btStatus, c ? "Polaczono!" : (btInitialized ? "Rozlaczono" : "Wylaczony"),
+            sizeof(sharedState.btStatus) - 1);
+  }
+#else
+  sharedState.btDisabledByJack = true;
+  sharedState.btConnected = false;
+  strncpy(sharedState.btStatus, "Brak BT (Pico)", sizeof(sharedState.btStatus) - 1);
+#endif
+  xSemaphoreGive(stateMutex);
+  markDirty();
+}
 
 static void internalMusicStop() {
   stopDecodeFlag = true;
+  pwmStopOutput();
+#if HSOS_HAS_WIRELESS
+  btStageSamples = 0;
+#endif
   fsLock();
   if (audioFile) audioFile.close();
   fsUnlock();
 
   mp3dec.end();
+  playedFramesTotal = 0;
+  currentTrackRate = 44100;
+  currentTrackKbps = 0;
+  currentFileSize = 0;
+  currentFilePos = 0;
 
   xSemaphoreTake(stateMutex, portMAX_DELAY);
   sharedState.musicPlaying = false;
   sharedState.musicPaused = false;
   sharedState.playingIdx = -1;
   sharedState.playingName[0] = '\0';
+  sharedState.filePos = 0;
+  sharedState.fileSize = 0;
+  sharedState.bitrateKbps = 0;
+  sharedState.elapsedSec = 0;
   xSemaphoreGive(stateMutex);
   markDirty();
 }
@@ -425,13 +668,10 @@ static void internalScanSD(bool forceRemount) {
   while (dir.next()) {
     const char* bn = baseNamePtr(dir.fileName().c_str());
     bool isDir = dir.isDirectory();
-    unsigned long sz = isDir ? 0UL : (unsigned long)dir.fileSize();
 
     char nameCopy[TRACK_NAME_LEN];
     strncpy(nameCopy, bn, sizeof(nameCopy) - 1);
     nameCopy[sizeof(nameCopy) - 1] = '\0';
-
-    Serial.printf("  - '%s' (%s, %lu B)\n", nameCopy, isDir ? "DIR" : "FILE", sz);
 
     if (!isDir && nameCopy[0] != '\0' && nameCopy[0] != '.' && endsWithMp3(nameCopy)) {
       xSemaphoreTake(stateMutex, portMAX_DELAY);
@@ -450,28 +690,55 @@ static void internalScanSD(bool forceRemount) {
 }
 
 static void internalOpenAndPlay(const char* fullPath, int listIdx) {
-  btEnsureInit();
   stopDecodeFlag = true;
+
+#if HSOS_HAS_WIRELESS
+  if (currentSink == ASINK_BT) {
+    btEnsureInit();
+  }
+  btStageSamples = 0;
+  resPrevL = resPrevR = 0;
+  resPhaseQ16 = 0;
+#endif
 
   fsLock();
   if (audioFile) audioFile.close();
   audioFile = fsOpenReadLocked(true, fullPath);
   bool opened = (bool)audioFile && !audioFile.isDirectory();
-  unsigned long fsize = opened ? (unsigned long)audioFile.size() : 0UL;
+  uint32_t fsize = opened ? (uint32_t)audioFile.size() : 0UL;
+  uint32_t dataStart = 0;
+
+  // Szybkie pominięcie nagłówka ID3v2 (okładki i metadane), aby odtwarzacz startował natychmiast
+  if (opened && fsize >= 10) {
+    uint8_t id3[10];
+    int n = audioFile.read(id3, 10);
+    if (n == 10 && id3[0] == 'I' && id3[1] == 'D' && id3[2] == '3') {
+      uint32_t tagSz = ((uint32_t)(id3[6] & 0x7F) << 21) |
+                       ((uint32_t)(id3[7] & 0x7F) << 14) |
+                       ((uint32_t)(id3[8] & 0x7F) << 7)  |
+                       ((uint32_t)(id3[9] & 0x7F));
+      if (id3[5] & 0x10) tagSz += 10;
+      dataStart = min(fsize, 10UL + tagSz);
+      audioFile.seek(dataStart);
+    } else {
+      audioFile.seek(0);
+    }
+  }
   if (!opened && audioFile) audioFile.close();
   fsUnlock();
 
-  dbgReadBytes = dbgConsumed = dbgFrames = dbgPcmBytes = 0;
-  dbgSampleRate = dbgChannels = 0;
-
   mp3dec.end();
-  Serial.printf("[MP3] Open '%s' ok=%d size=%lu heapBefore=%lu\n",
-                fullPath, opened ? 1 : 0, fsize, (unsigned long)rp2040.getFreeHeap());
+  playedFramesTotal = 0;
+  currentTrackRate = 44100;
+  currentTrackKbps = 0;
+  currentFileSize = fsize;
+  currentFilePos = dataStart;
 
   if (opened) {
     mp3dec.begin();
-    Serial.printf("[MP3] Po mp3dec.begin() heapAfter=%lu\n", (unsigned long)rp2040.getFreeHeap());
     stopDecodeFlag = false;
+  } else {
+    pwmStopOutput();
   }
 
   const char* bn = baseNamePtr(fullPath);
@@ -483,11 +750,19 @@ static void internalOpenAndPlay(const char* fullPath, int listIdx) {
     sharedState.playingName[sizeof(sharedState.playingName) - 1] = '\0';
     sharedState.musicPlaying = true;
     sharedState.musicPaused = false;
+    sharedState.filePos = currentFilePos;
+    sharedState.fileSize = currentFileSize;
+    sharedState.sampleRate = 44100;
+    sharedState.bitrateKbps = 0;
+    sharedState.elapsedSec = 0;
   } else {
     sharedState.playingIdx = -1;
     sharedState.playingName[0] = '\0';
     sharedState.musicPlaying = false;
     sharedState.musicPaused = false;
+    sharedState.filePos = 0;
+    sharedState.fileSize = 0;
+    sharedState.elapsedSec = 0;
   }
   xSemaphoreGive(stateMutex);
   markDirty();
@@ -507,7 +782,12 @@ static void internalPlayTrack(int idx) {
   internalOpenAndPlay(path, idx);
 }
 
+#if HSOS_HAS_WIRELESS
 static void internalBtScan() {
+  if (currentSink == ASINK_JACK) {
+    setBtStatus("Odlacz sluchawki!");
+    return;
+  }
   internalMusicStop();
 
   xSemaphoreTake(stateMutex, portMAX_DELAY);
@@ -541,6 +821,11 @@ static void internalBtScan() {
 }
 
 static void internalBtConnectIdx(int idx) {
+  if (currentSink == ASINK_JACK) {
+    setBtStatus("Odlacz sluchawki!");
+    return;
+  }
+
   uint8_t targetAddr[6];
   char targetName[22] = {0};
 
@@ -565,7 +850,6 @@ static void internalBtConnectIdx(int idx) {
 
   bool ok = false;
   {
-    // A2DPSource::connect() nie zakłada BluetoothLock wewnątrz biblioteki
     BluetoothLock btLock;
     ok = a2dp.connect(targetAddr);
   }
@@ -573,14 +857,42 @@ static void internalBtConnectIdx(int idx) {
     setBtStatus("Blad polaczenia");
   }
 }
+#endif // HSOS_HAS_WIRELESS
 
 static void taskAudioBT(void *pvParams) {
   (void)pvParams;
+
+  pinMode(JACK_DETECT_PIN, INPUT_PULLUP);
+  vTaskDelay(pdMS_TO_TICKS(20));
+  bool initRaw = (digitalRead(JACK_DETECT_PIN) == LOW);
+  debouncedJack = initRaw;
+  lastRawJack = initRaw;
+  jackDebounceMs = millis();
+
+  activeVolumePct = (uint8_t)constrain(sysConfig.volume, 0, 100);
+  xSemaphoreTake(stateMutex, portMAX_DELAY);
+  sharedState.volume = activeVolumePct;
+  xSemaphoreGive(stateMutex);
+
+  syncAudioRouting(true);
   internalScanSD(false);
+
   bool lastConn = false;
-  unsigned long lastDbgMs = 0;
+  unsigned long lastUiTelemetryMs = 0;
 
   for (;;) {
+    // 1. Obsługa detekcji gniazda słuchawkowego (debounce 60 ms)
+    bool rawJack = (digitalRead(JACK_DETECT_PIN) == LOW);
+    if (rawJack != lastRawJack) {
+      lastRawJack = rawJack;
+      jackDebounceMs = millis();
+    } else if (rawJack != debouncedJack && (millis() - jackDebounceMs >= 60UL)) {
+      debouncedJack = rawJack;
+      Serial.printf("[AUDIO] Jack %s\n", debouncedJack ? "WPIETY (LOW)" : "WYJETY (HIGH)");
+      syncAudioRouting(false);
+    }
+
+    // 2. Obsługa kolejki komend
     AudioCmd cmd;
     while (xQueueReceive(audioCmdQueue, &cmd, 0) == pdTRUE) {
       switch (cmd.type) {
@@ -603,6 +915,7 @@ static void taskAudioBT(void *pvParams) {
           xSemaphoreTake(stateMutex, portMAX_DELAY);
           if (sharedState.musicPlaying) {
             sharedState.musicPaused = !sharedState.musicPaused;
+            if (sharedState.musicPaused) pwmStopOutput();
             markDirty();
           }
           xSemaphoreGive(stateMutex);
@@ -610,116 +923,202 @@ static void taskAudioBT(void *pvParams) {
         case ACMD_STOP:
           internalMusicStop();
           break;
+        case ACMD_NEXT_TRACK: {
+          int nextIdx = -1;
+          xSemaphoreTake(stateMutex, portMAX_DELAY);
+          if (sharedState.trackCount > 0) {
+            nextIdx = (sharedState.playingIdx >= 0) ? ((sharedState.playingIdx + 1) % sharedState.trackCount) : 0;
+          }
+          xSemaphoreGive(stateMutex);
+          if (nextIdx >= 0) internalPlayTrack(nextIdx);
+          break;
+        }
+        case ACMD_PREV_TRACK: {
+          int prevIdx = -1;
+          xSemaphoreTake(stateMutex, portMAX_DELAY);
+          if (sharedState.trackCount > 0) {
+            prevIdx = (sharedState.playingIdx >= 0)
+                      ? ((sharedState.playingIdx + sharedState.trackCount - 1) % sharedState.trackCount)
+                      : 0;
+          }
+          xSemaphoreGive(stateMutex);
+          if (prevIdx >= 0) internalPlayTrack(prevIdx);
+          break;
+        }
+        case ACMD_SET_VOLUME: {
+          int v = constrain(cmd.arg, 0, 100);
+          activeVolumePct = (uint8_t)v;
+          sysConfig.volume = v;
+          xSemaphoreTake(stateMutex, portMAX_DELAY);
+          sharedState.volume = (uint8_t)v;
+          xSemaphoreGive(stateMutex);
+          markDirty();
+          break;
+        }
+        case ACMD_CYCLE_OUT_MODE: {
+#if HSOS_HAS_WIRELESS
+          currentOutMode = (AudioOutMode)(((int)currentOutMode + 1) % 3);
+#else
+          currentOutMode = (currentOutMode == AOUT_MODE_AUTO) ? AOUT_MODE_JACK : AOUT_MODE_AUTO;
+#endif
+          syncAudioRouting(true);
+          break;
+        }
         case ACMD_BT_SCAN:
+#if HSOS_HAS_WIRELESS
           internalBtScan();
+#endif
           break;
         case ACMD_BT_CONNECT_IDX:
+#if HSOS_HAS_WIRELESS
           internalBtConnectIdx(cmd.arg);
+#endif
           break;
         case ACMD_BT_DISCONNECT:
-          internalMusicStop();
+#if HSOS_HAS_WIRELESS
+          if (currentSink == ASINK_BT) internalMusicStop();
           if (btInitialized) a2dp.disconnect();
-          setBtStatus("Rozlaczono");
+          if (currentSink != ASINK_JACK) setBtStatus("Rozlaczono");
+#endif
           break;
         case ACMD_BT_CLEAR_PAIRING:
-          internalMusicStop();
+#if HSOS_HAS_WIRELESS
+          if (currentSink == ASINK_BT) internalMusicStop();
           if (btInitialized) a2dp.clearPairing();
-          setBtStatus("Pary usuniete");
+          if (currentSink != ASINK_JACK) setBtStatus("Pary usuniete");
+#endif
           break;
       }
     }
 
-    bool nowConn = btInitialized && a2dp.connected();
+#if HSOS_HAS_WIRELESS
+    bool nowConn = (currentSink == ASINK_BT) && btInitialized && a2dp.connected();
     if (nowConn != lastConn) {
       lastConn = nowConn;
+      if (!nowConn && currentSink == ASINK_BT) {
+        btStageSamples = 0;
+      }
       xSemaphoreTake(stateMutex, portMAX_DELAY);
       sharedState.btConnected = nowConn;
-      strncpy(sharedState.btStatus, nowConn ? "Polaczono!" : "Rozlaczono", sizeof(sharedState.btStatus) - 1);
-      sharedState.btStatus[sizeof(sharedState.btStatus) - 1] = '\0';
+      if (currentSink != ASINK_JACK) {
+        strncpy(sharedState.btStatus, nowConn ? "Polaczono!" : "Rozlaczono", sizeof(sharedState.btStatus) - 1);
+        sharedState.btStatus[sizeof(sharedState.btStatus) - 1] = '\0';
+      }
       xSemaphoreGive(stateMutex);
       markDirty();
     }
+#else
+    (void)lastConn;
+#endif
 
-    bool playingNow = false;
-    bool pausedNow  = false;
     xSemaphoreTake(stateMutex, portMAX_DELAY);
-    playingNow = sharedState.musicPlaying;
-    pausedNow  = sharedState.musicPaused;
+    bool playingNow = sharedState.musicPlaying;
+    bool pausedNow  = sharedState.musicPaused;
     xSemaphoreGive(stateMutex);
 
     bool isStreaming = false;
-    if (nowConn && playingNow && !pausedNow) {
+    if (playingNow && !pausedNow && sinkReadyForAudio()) {
       isStreaming = true;
-      fsLock();
-      int len = audioFile ? audioFile.read(mp3Buf, sizeof(mp3Buf)) : -1;
-      fsUnlock();
+      for (int burst = 0; burst < 4 && !stopDecodeFlag; burst++) {
+        if (!sinkNeedsData()) break;
+        if (uxQueueMessagesWaiting(audioCmdQueue) > 0) break;
 
-      if (len > 0) {
-        dbgReadBytes += (uint32_t)len;
-        int off = 0;
-        while (off < len && !stopDecodeFlag) {
-          size_t consumed = mp3dec.write(mp3Buf + off, (size_t)(len - off));
-          dbgConsumed += (uint32_t)consumed;
-          if (consumed == 0) {
-            Serial.printf("[MP3] BLAD: mp3dec.write zwrocil 0! freeHeap=%lu\n",
-                          (unsigned long)rp2040.getFreeHeap());
-            internalMusicStop();
-            break;
-          }
-          off += (int)consumed;
-        }
-      } else {
         fsLock();
-        if (audioFile) audioFile.close();
+        int len = audioFile ? audioFile.read(mp3Buf, sizeof(mp3Buf)) : -1;
+        uint32_t pos = audioFile ? (uint32_t)audioFile.position() : currentFileSize;
         fsUnlock();
 
-        int nextIdx = -1;
-        xSemaphoreTake(stateMutex, portMAX_DELAY);
-        if (sharedState.playingIdx >= 0 && sharedState.trackCount > 0) {
-          nextIdx = (sharedState.playingIdx + 1) % sharedState.trackCount;
+        if (len > 0) {
+          currentFilePos = pos;
+          int off = 0;
+          while (off < len && !stopDecodeFlag && sinkReadyForAudio()) {
+            size_t chunk = min((size_t)512, (size_t)(len - off));
+            size_t consumed = mp3dec.write(mp3Buf + off, chunk);
+            if (consumed == 0) {
+              Serial.printf("[MP3] BLAD: mp3dec.write zwrocil 0! freeHeap=%lu\n",
+                            (unsigned long)rp2040.getFreeHeap());
+              internalMusicStop();
+              break;
+            }
+            off += (int)consumed;
+            if (uxQueueMessagesWaiting(audioCmdQueue) > 0) break;
+          }
+        } else {
+          fsLock();
+          if (audioFile) audioFile.close();
+          fsUnlock();
+
+          int nextIdx = -1;
+          xSemaphoreTake(stateMutex, portMAX_DELAY);
+          if (sharedState.playingIdx >= 0 && sharedState.trackCount > 0) {
+            nextIdx = (sharedState.playingIdx + 1) % sharedState.trackCount;
+          }
+          xSemaphoreGive(stateMutex);
+
+          if (nextIdx >= 0) internalPlayTrack(nextIdx);
+          else internalMusicStop();
+          break;
         }
+      }
+
+      if (millis() - lastUiTelemetryMs >= 500UL) {
+        lastUiTelemetryMs = millis();
+        uint32_t sec = (currentTrackRate > 0) ? (playedFramesTotal / (uint32_t)currentTrackRate) : 0;
+        xSemaphoreTake(stateMutex, portMAX_DELAY);
+        sharedState.filePos = currentFilePos;
+        sharedState.fileSize = currentFileSize;
+        sharedState.sampleRate = (uint16_t)currentTrackRate;
+        sharedState.bitrateKbps = (uint16_t)currentTrackKbps;
+        sharedState.elapsedSec = sec;
         xSemaphoreGive(stateMutex);
-
-        if (nextIdx >= 0) internalPlayTrack(nextIdx);
-        else internalMusicStop();
+        markDirty();
       }
-
-      if (millis() - lastDbgMs >= 1000UL) {
-        lastDbgMs = millis();
-        Serial.printf("[MP3] read=%lu cons=%lu frames=%lu pcmB=%lu %dHz %dch avail=%d heap=%lu\n",
-                      (unsigned long)dbgReadBytes, (unsigned long)dbgConsumed,
-                      (unsigned long)dbgFrames, (unsigned long)dbgPcmBytes,
-                      dbgSampleRate, dbgChannels, a2dp.availableForWrite(),
-                      (unsigned long)rp2040.getFreeHeap());
-      }
-    } else if (nowConn) {
-      int avail = a2dp.availableForWrite();
-      if (avail >= 2048) {
-        int bursts = 0;
-        while (avail >= (int)sizeof(silenceBuf) && bursts < 2) {
-          size_t w = a2dp.write((const uint8_t *)silenceBuf, sizeof(silenceBuf));
-          if (w == 0) break;
-          avail -= (int)w;
-          bursts++;
+    }
+#if HSOS_HAS_WIRELESS
+    else if (currentSink == ASINK_BT && btInitialized && a2dp.connected()) {
+      // Karmi A2DP wyrównaną ciszą 512B przy pauzie lub zatrzymaniu
+      if (btStageSamples > 0) {
+        while (btStageSamples < 256) btStage[btStageSamples++] = 0;
+        if (a2dp.availableForWrite() >= 512) {
+          a2dp.write((const uint8_t *)btStage, 512);
+          btStageSamples = 0;
+        }
+      } else {
+        int avail = a2dp.availableForWrite();
+        if (avail >= 4096) {
+          int bursts = 0;
+          while (avail >= (int)sizeof(btSilence512) && bursts < 2) {
+            size_t w = a2dp.write((const uint8_t *)btSilence512, sizeof(btSilence512));
+            if (w < sizeof(btSilence512)) break;
+            avail -= (int)w;
+            bursts++;
+          }
         }
       }
     }
+#endif
 
-    vTaskDelay(pdMS_TO_TICKS(isStreaming ? 1 : 10));
+    vTaskDelay(pdMS_TO_TICKS(isStreaming ? 2 : 12));
   }
 }
 
 void btAudioStartTask() {
   memset(&sharedState, 0, sizeof(sharedState));
   memset(trackNames, 0, sizeof(trackNames));
+#if HSOS_HAS_WIRELESS
   strncpy(sharedState.btStatus, "Wylaczony", sizeof(sharedState.btStatus) - 1);
+#else
+  strncpy(sharedState.btStatus, "Brak BT (Pico)", sizeof(sharedState.btStatus) - 1);
+#endif
   sharedState.playingIdx = -1;
+  sharedState.volume = (uint8_t)constrain(sysConfig.volume, 0, 100);
+  sharedState.outMode = AOUT_MODE_AUTO;
 
   stateMutex = xSemaphoreCreateMutex();
-  audioCmdQueue = xQueueCreate(12, sizeof(AudioCmd));
+  audioCmdQueue = xQueueCreate(16, sizeof(AudioCmd));
 
-  // Stos 2048 słów (8 KB) + Core 0
-  xTaskCreateAffinitySet(taskAudioBT, "AudioBT", 2048, nullptr, 1, (1 << 0), nullptr);
+  // Wyższy priorytet (2), aby rysowanie LCD przez SW SPI (UI prio 1) nie powodowało zacięć audio
+  xTaskCreateAffinitySet(taskAudioBT, "AudioBT", 2304, nullptr, 2, (1 << 0), nullptr);
 }
 
 void btAudioSendCmd(AudioCmdType type, int arg) {

@@ -39,6 +39,7 @@ enum NetCmdType : uint8_t {
 
 void netFtpStartTask();
 void netFtpSendCmd(NetCmdType type, int arg = 0);
+void netFtpReloadCreds();
 void netFtpGetSnapshot(NetUiSnapshot &out);
 bool netFtpTakeDirty();
 bool netFtpConsumeSyncedTime(int &hour, int &minute);

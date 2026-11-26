@@ -117,13 +117,15 @@ bool modalHandleKey(uint8_t k, bool &confirmedOut, bool &submittedOut) {
     return true;
   }
 
-  if (modalMode == MODAL_WIFI_PASS || modalMode == MODAL_NEW_MD) {
+  if (modalMode == MODAL_WIFI_PASS || modalMode == MODAL_NEW_MD ||
+      modalMode == MODAL_FTP_USER  || modalMode == MODAL_FTP_PASS) {
+    size_t maxLen = (modalMode == MODAL_FTP_USER || modalMode == MODAL_FTP_PASS) ? 22 : 60;
     size_t len = strlen(modalInput);
     if (k == '\b') {
       if (len > 0) modalInput[len - 1] = '\0';
     } else if (k == '\n') {
       submittedOut = true;
-    } else if (k >= 32 && k <= 126 && len < 60) {
+    } else if (k >= 32 && k <= 126 && len < maxLen) {
       modalInput[len] = (char)k;
       modalInput[len + 1] = '\0';
     }
@@ -145,7 +147,8 @@ void rysujModal() {
   d.setFont(u8g2_font_5x7_tr);
   d.drawStr(8, 26, modalTitle);
 
-  if (modalMode == MODAL_WIFI_PASS || modalMode == MODAL_NEW_MD) {
+  if (modalMode == MODAL_WIFI_PASS || modalMode == MODAL_NEW_MD ||
+      modalMode == MODAL_FTP_USER  || modalMode == MODAL_FTP_PASS) {
     d.drawFrame(8, 30, 112, 11);
     char vis[24];
     size_t len = strlen(modalInput);
@@ -186,15 +189,31 @@ void rysujBootSplash(const char* statusLine) {
   rysujHollowStar(21, 27, false);
 
   d.setFont(u8g2_font_6x10_tr);
-  d.drawStr(38, 23, "HOLLOW STAR");
-  d.drawStr(38, 34, "OS BASIC");
-
-  d.drawHLine(6, 44, 116);
+  d.drawStr(38, 22, "HOLLOW STAR");
+  d.drawStr(38, 33, "OS " OS_BRAND_VERSION);
   d.setFont(u8g2_font_5x7_tr);
+  d.drawStr(38, 41, HSOS_BOARD_TAG " SMP");
+
+  d.drawHLine(6, 45, 116);
   d.drawStr(8, 56, statusLine ? statusLine : "Inicjalizacja...");
   d.sendBuffer();
 }
 
+static void rysujIkoneSluchawkiPasek(int hx, bool active) {
+  U8G2 &d = uiDisplay();
+  d.drawHLine(hx + 1, 1, 7);
+  d.drawVLine(hx,     2, 4);
+  d.drawVLine(hx + 8, 2, 4);
+  if (active) {
+    d.drawBox(hx,     4, 3, 4);
+    d.drawBox(hx + 6, 4, 3, 4);
+  } else {
+    d.drawFrame(hx,     4, 3, 4);
+    d.drawFrame(hx + 6, 4, 3, 4);
+  }
+}
+
+#if HSOS_HAS_WIRELESS
 static void rysujIkoneWifiPasek(int wx) {
   U8G2 &d = uiDisplay();
   // 4 schodkowe słupki sygnału jak w telefonie (ostre prostokąty, y=1..7)
@@ -220,6 +239,7 @@ static void rysujIkoneWifiPasek(int wx) {
     }
   }
 }
+#endif
 
 void rysujPasekStanu() {
   U8G2 &d = uiDisplay();
@@ -240,18 +260,25 @@ void rysujPasekStanu() {
   d.setFont(u8g2_font_5x7_tr);
   d.drawStr(51, 7, timeStr);
 
-  // PRAWA: Wskaźnik zasięgu Wi-Fi (jak w telefonie) + kanciasta ikona Bluetooth + kropka BT
-  rysujIkoneWifiPasek(99);
-
-  int bx = 114;
-  d.drawVLine(bx + 2, 1, 7);
-  d.drawLine(bx + 2, 1, bx + 4, 3);
-  d.drawLine(bx + 4, 3, bx, 6);
-  d.drawLine(bx, 2, bx + 4, 5);
-  d.drawLine(bx + 4, 5, bx + 2, 7);
-  if (audioSnap.btConnected) {
-    d.drawBox(122, 3, 3, 3);
+  // PRAWA: Zależna od wersji Pico W vs zwykłe Pico
+#if HSOS_HAS_WIRELESS
+  rysujIkoneWifiPasek(95);
+  if (audioSnap.activeSink == ASINK_JACK) {
+    rysujIkoneSluchawkiPasek(115, true);
+  } else {
+    int bx = 114;
+    d.drawVLine(bx + 2, 1, 7);
+    d.drawLine(bx + 2, 1, bx + 4, 3);
+    d.drawLine(bx + 4, 3, bx, 6);
+    d.drawLine(bx, 2, bx + 4, 5);
+    d.drawLine(bx + 4, 5, bx + 2, 7);
+    if (audioSnap.btConnected) {
+      d.drawBox(122, 3, 3, 3);
+    }
   }
+#else
+  rysujIkoneSluchawkiPasek(115, audioSnap.jackConnected || audioSnap.activeSink == ASINK_JACK);
+#endif
 
   d.drawHLine(0, 9, 128);
 }

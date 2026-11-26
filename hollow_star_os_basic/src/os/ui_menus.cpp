@@ -6,21 +6,38 @@
 #include "../apps/app_files.h"
 
 static const char* PAGE0_NAMES[6] = {
-  "Temp. RP2040", "Kalkulator", "Notatnik",
-  "Gry",          "Muzyka",     "Ustawienia"
+  "Sys Info", "Kalkulator", "Notatnik",
+  "Gry",      "Muzyka",     "Ustawienia"
 };
+
+#if HSOS_HAS_WIRELESS
 static const char* PAGE1_NAMES[3] = {
   "Pliki", "Narzedzia", "Uspienie"
 };
+static const int PAGE1_COUNT = 3;
+
+static const char* SETTINGS_NAMES[6] = {
+  "Bluetooth", "Wi-Fi / NTP", "Kontrast",
+  "Czas",      "Formatowanie","About"
+};
+static const int SETTINGS_COUNT = 6;
+#else
+static const char* PAGE1_NAMES[2] = {
+  "Pliki", "Uspienie"
+};
+static const int PAGE1_COUNT = 2;
+
+static const char* SETTINGS_NAMES[4] = {
+  "Kontrast", "Czas", "Formatowanie", "About"
+};
+static const int SETTINGS_COUNT = 4;
+#endif
+
 static const char* GAMES_NAMES[3] = {
   "Brick Breaker", "Tetris", "Wyscigi"
 };
 static const char* TOOLS_NAMES[2] = {
   "Serwer FTP", "Sync NTP"
-};
-static const char* SETTINGS_NAMES[6] = {
-  "Bluetooth", "Wi-Fi / NTP", "Kontrast",
-  "Czas",      "Formatowanie","About"
 };
 
 static int mainPage    = 0;
@@ -32,13 +49,11 @@ static int wybranaUst  = 0;
 static void rysujIkonePage0(int idx, int cx, int cy) {
   U8G2 &d = uiDisplay();
   switch (idx) {
-    case 0: // Temp
-      d.drawFrame(cx - 4, cy - 6, 5, 9);
-      d.drawBox(cx - 5, cy + 2, 7, 5);
-      d.drawVLine(cx - 2, cy - 3, 6);
-      d.drawHLine(cx + 2, cy - 5, 3);
-      d.drawHLine(cx + 2, cy - 2, 2);
-      d.drawHLine(cx + 2, cy + 1, 3);
+    case 0: // Sys Info (chip / monitor)
+      d.drawFrame(cx - 6, cy - 5, 13, 11);
+      d.drawBox(cx - 4, cy - 3, 2, 7);
+      d.drawBox(cx - 1, cy - 1, 2, 5);
+      d.drawBox(cx + 2, cy - 3, 2, 7);
       break;
     case 1: // Kalkulator
       d.drawFrame(cx - 6, cy - 7, 13, 14);
@@ -75,31 +90,38 @@ static void rysujIkonePage0(int idx, int cx, int cy) {
   }
 }
 
+static void rysujIkoneSleep(int cx, int cy) {
+  U8G2 &d = uiDisplay();
+  d.drawFrame(cx - 6, cy - 5, 13, 11);
+  d.setDrawColor(d.getDrawColor() ? 0 : 1);
+  d.drawBox(cx - 2, cy - 6, 5, 3);
+  d.setDrawColor(d.getDrawColor() ? 0 : 1);
+  d.drawBox(cx - 1, cy - 7, 3, 7);
+}
+
 static void rysujIkonePage1(int idx, int cx, int cy) {
   U8G2 &d = uiDisplay();
-  switch (idx) {
-    case 0: // Pliki
-      d.drawBox(cx - 7, cy - 6, 6, 2);
-      d.drawFrame(cx - 7, cy - 4, 15, 10);
-      d.drawHLine(cx - 5, cy - 1, 11);
-      break;
-    case 1: // Narzędzia
-      d.drawFrame(cx - 7, cy - 6, 15, 12);
-      d.drawPixel(cx - 4, cy - 2);
-      d.drawPixel(cx - 3, cy - 1);
-      d.drawPixel(cx - 2, cy);
-      d.drawPixel(cx - 3, cy + 1);
-      d.drawPixel(cx - 4, cy + 2);
-      d.drawHLine(cx, cy + 2, 5);
-      break;
-    case 2: // Uśpienie
-      d.drawFrame(cx - 6, cy - 5, 13, 11);
-      d.setDrawColor(d.getDrawColor() ? 0 : 1);
-      d.drawBox(cx - 2, cy - 6, 5, 3);
-      d.setDrawColor(d.getDrawColor() ? 0 : 1);
-      d.drawBox(cx - 1, cy - 7, 3, 7);
-      break;
+  if (idx == 0) { // Pliki
+    d.drawBox(cx - 7, cy - 6, 6, 2);
+    d.drawFrame(cx - 7, cy - 4, 15, 10);
+    d.drawHLine(cx - 5, cy - 1, 11);
+#if HSOS_HAS_WIRELESS
+  } else if (idx == 1) { // Narzędzia
+    d.drawFrame(cx - 7, cy - 6, 15, 12);
+    d.drawPixel(cx - 4, cy - 2);
+    d.drawPixel(cx - 3, cy - 1);
+    d.drawPixel(cx - 2, cy);
+    d.drawPixel(cx - 3, cy + 1);
+    d.drawPixel(cx - 4, cy + 2);
+    d.drawHLine(cx, cy + 2, 5);
+  } else { // Uśpienie
+    rysujIkoneSleep(cx, cy);
   }
+#else
+  } else { // Uśpienie (na zwykłym Pico Narzędzia są ukryte)
+    rysujIkoneSleep(cx, cy);
+  }
+#endif
 }
 
 static void rysujIkoneGry(int idx, int cx, int cy) {
@@ -151,9 +173,9 @@ static void rysujIkoneNar(int idx, int cx, int cy) {
   }
 }
 
-static void rysujIkoneUst(int idx, int cx, int cy) {
+static void rysujIkoneUstLogical(int logicalIdx, int cx, int cy) {
   U8G2 &d = uiDisplay();
-  switch (idx) {
+  switch (logicalIdx) {
     case 0: // Bluetooth
       d.drawVLine(cx, cy - 6, 13);
       d.drawLine(cx, cy - 6, cx + 4, cy - 2);
@@ -190,6 +212,14 @@ static void rysujIkoneUst(int idx, int cx, int cy) {
   }
 }
 
+static void rysujIkoneUst(int idx, int cx, int cy) {
+#if HSOS_HAS_WIRELESS
+  rysujIkoneUstLogical(idx, cx, cy);
+#else
+  rysujIkoneUstLogical(idx + 2, cx, cy);
+#endif
+}
+
 static void drawTile(int x, int y, int w, int h, bool selected, void (*drawIcon)(int, int, int), int idx) {
   U8G2 &d = uiDisplay();
   if (selected) {
@@ -220,26 +250,33 @@ static void mainDraw() {
   d.clearBuffer();
   rysujPasekStanu();
 
-  int count = (mainPage == 0) ? 6 : 3;
+  int count = (mainPage == 0) ? 6 : PAGE1_COUNT;
+  if (wybranaMain >= count) wybranaMain = count - 1;
+
   for (int i = 0; i < count; i++) {
     int col = i % 3, row = i / 3;
-    int x = 3 + col * 42, y = 11 + row * 21;
-    drawTile(x, y, 38, 19, i == wybranaMain, (mainPage == 0) ? rysujIkonePage0 : rysujIkonePage1, i);
+#if HSOS_HAS_WIRELESS
+    int x = 3 + col * 42;
+    int w = 38;
+#else
+    int x = (mainPage == 0) ? (3 + col * 42) : (14 + col * 54);
+    int w = (mainPage == 0) ? 38 : 46;
+#endif
+    int y = 11 + row * 21;
+    drawTile(x, y, w, 19, i == wybranaMain, (mainPage == 0) ? rysujIkonePage0 : rysujIkonePage1, i);
   }
 
-  // Na karcie 2 (3 kafelki w górnym rzędzie) dolny pas pokazuje branding OS
   if (mainPage == 1) {
     d.drawFrame(3, 33, 122, 17);
     rysujHollowStar(13, 41, true);
     d.setFont(u8g2_font_5x7_tr);
     d.drawStr(24, 41, OS_BRAND_NAME);
-    d.drawStr(24, 48, OS_BRAND_EDITION "  " OS_BRAND_VERSION);
+    d.drawStr(24, 48, HSOS_BOARD_TAG " " OS_BRAND_VERSION);
   }
 
   const char* appName = (mainPage == 0) ? PAGE0_NAMES[wybranaMain] : PAGE1_NAMES[wybranaMain];
   drawMenuFooter(appName, false);
 
-  // Indykator kart: pusta ramka = aktywna strona, wypełniony kwadrat = nieaktywna
   for (int p = 0; p < 2; p++) {
     int dx = 113 + p * 8;
     if (mainPage == p) d.drawFrame(dx, 56, 5, 5);
@@ -259,7 +296,7 @@ static bool mainKey(uint8_t k) {
   if (mainPage == 0) {
     int col = wybranaMain % 3, row = wybranaMain / 3;
     if (k == KEY_LEFT) {
-      if (col == 0) { mainPage = 1; wybranaMain = 2; }
+      if (col == 0) { mainPage = 1; wybranaMain = PAGE1_COUNT - 1; }
       else          { col--; wybranaMain = row * 3 + col; }
     } else if (k == KEY_RIGHT) {
       if (col == 2) { mainPage = 1; wybranaMain = 0; }
@@ -270,7 +307,7 @@ static bool mainKey(uint8_t k) {
     } else if (k == '\n' || k == ' ') {
       if (wybranaMain == 0)      uiSetScreen(APP_TEMP);
       else if (wybranaMain == 1) uiSetScreen(APP_CALC);
-      else if (wybranaMain == 2) appNotesOpenFile(false, "/start.md", APP_MENU, false);
+      else if (wybranaMain == 2) appNotesOpenSetup(APP_MENU);
       else if (wybranaMain == 3) uiSetScreen(APP_GAMES_MENU);
       else if (wybranaMain == 4) {
         if (!audioSnap.sdReady) btAudioSendCmd(ACMD_SCAN_SD);
@@ -282,17 +319,22 @@ static bool mainKey(uint8_t k) {
     return true;
   }
 
-  // Karta 2 (0: Pliki, 1: Narzędzia, 2: Uśpienie)
+  // Karta 2
   if (k == KEY_LEFT) {
     if (wybranaMain == 0) { mainPage = 0; wybranaMain = 2; }
     else wybranaMain--;
   } else if (k == KEY_RIGHT) {
-    if (wybranaMain == 2) { mainPage = 0; wybranaMain = 0; }
+    if (wybranaMain >= PAGE1_COUNT - 1) { mainPage = 0; wybranaMain = 0; }
     else wybranaMain++;
   } else if (k == '\n' || k == ' ') {
+#if HSOS_HAS_WIRELESS
     if (wybranaMain == 0)      { appFilesResetRoot(); uiSetScreen(APP_FILES); }
     else if (wybranaMain == 1) uiSetScreen(APP_TOOLS_MENU);
     else if (wybranaMain == 2) osEnterSuspend();
+#else
+    if (wybranaMain == 0)      { appFilesResetRoot(); uiSetScreen(APP_FILES); }
+    else if (wybranaMain == 1) osEnterSuspend();
+#endif
   }
   return true;
 }
@@ -323,6 +365,10 @@ static bool gamesKey(uint8_t k) {
 
 // --- Podmenu: Narzędzia ---
 static void toolsDraw() {
+#if !HSOS_HAS_WIRELESS
+  uiSetScreen(APP_MENU);
+  return;
+#else
   U8G2 &d = uiDisplay();
   d.clearBuffer();
   rysujPasekStanu();
@@ -332,9 +378,15 @@ static void toolsDraw() {
   drawMenuFooter(TOOLS_NAMES[wybranaNar], true);
   rysujToastJesliAktywny();
   uiFinishFrame();
+#endif
 }
 
 static bool toolsKey(uint8_t k) {
+#if !HSOS_HAS_WIRELESS
+  (void)k;
+  uiSetScreen(APP_MENU);
+  return true;
+#else
   if (k == KEY_ESC) uiSetScreen(APP_MENU);
   else if (k == KEY_LEFT || k == KEY_RIGHT) wybranaNar = 1 - wybranaNar;
   else if (k == '\n' || k == ' ') {
@@ -348,17 +400,27 @@ static bool toolsKey(uint8_t k) {
     }
   }
   return true;
+#endif
 }
 
-// --- Podmenu: Ustawienia (3x2) ---
+// --- Podmenu: Ustawienia ---
 static void settingsDraw() {
   U8G2 &d = uiDisplay();
   d.clearBuffer();
   rysujPasekStanu();
+  if (wybranaUst >= SETTINGS_COUNT) wybranaUst = 0;
+
+#if HSOS_HAS_WIRELESS
   for (int i = 0; i < 6; i++) {
     int col = i % 3, row = i / 3;
     drawTile(3 + col * 42, 11 + row * 21, 38, 19, i == wybranaUst, rysujIkoneUst, i);
   }
+#else
+  for (int i = 0; i < 4; i++) {
+    int col = i % 2, row = i / 2;
+    drawTile(14 + col * 54, 11 + row * 21, 46, 19, i == wybranaUst, rysujIkoneUst, i);
+  }
+#endif
   drawMenuFooter(SETTINGS_NAMES[wybranaUst], true);
   uiFinishFrame();
 }
@@ -368,6 +430,7 @@ static bool settingsKey(uint8_t k) {
     uiSetScreen(APP_MENU);
     return true;
   }
+#if HSOS_HAS_WIRELESS
   int col = wybranaUst % 3, row = wybranaUst / 3;
   if (k == KEY_LEFT)  col = (col + 2) % 3;
   else if (k == KEY_RIGHT) col = (col + 1) % 3;
@@ -382,6 +445,19 @@ static bool settingsKey(uint8_t k) {
     return true;
   }
   wybranaUst = row * 3 + col;
+#else
+  int col = wybranaUst % 2, row = wybranaUst / 2;
+  if (k == KEY_LEFT || k == KEY_RIGHT) col = 1 - col;
+  else if (k == KEY_UP || k == KEY_DOWN) row = 1 - row;
+  else if (k == '\n' || k == ' ') {
+    if (wybranaUst == 0)      uiSetScreen(APP_SET_CONTRAST);
+    else if (wybranaUst == 1) uiSetScreen(APP_SET_TIME);
+    else if (wybranaUst == 2) uiSetScreen(APP_SET_FORMAT);
+    else if (wybranaUst == 3) uiSetScreen(APP_SET_ABOUT);
+    return true;
+  }
+  wybranaUst = row * 2 + col;
+#endif
   return true;
 }
 

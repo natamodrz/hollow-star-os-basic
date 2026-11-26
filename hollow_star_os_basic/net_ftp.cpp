@@ -1,4 +1,9 @@
 #include <Arduino.h>
+#include "src/os/app_types.h"
+#include "storage_cfg.h"
+#include "net_ftp.h"
+
+#if HSOS_HAS_WIRELESS
 #include <WiFi.h>
 #include <time.h>
 #include <new>
@@ -6,8 +11,6 @@
 #include <task.h>
 #include <queue.h>
 #include <semphr.h>
-#include "storage_cfg.h"
-#include "net_ftp.h"
 
 static const uint16_t FTP_CTRL_PORT = 21;
 static const uint16_t FTP_DATA_PORT = 50009; // 195 * 256 + 89
@@ -21,6 +24,8 @@ static QueueHandle_t netCmdQueue = nullptr;
 static SemaphoreHandle_t netMutex = nullptr;
 static volatile bool netDirty = true;
 static NetUiSnapshot netState;
+static char ftpCfgUser[24] = "hollow";
+static char ftpCfgPass[24] = "hollow";
 
 // Obiekty serwera FTP (używane wyłącznie w TaskNet)
 static WiFiServer ftpCtrlSrv(FTP_CTRL_PORT);
@@ -30,6 +35,8 @@ static String ftpCmdLine = "";
 static String ftpCwd = "/";
 static bool ftpActive = false;
 static bool ftpOnSD = false;
+static bool ftpAuthed = false;
+static char ftpLoginUser[24] = {0};
 static uint8_t ftpBuf[512];
 
 static void markNetDirty() { netDirty = true; }
@@ -186,6 +193,8 @@ static void ftpStart(bool useSD) {
   ftpOnSD = useSD;
   ftpCwd = "/";
   ftpCmdLine = "";
+  ftpAuthed = false;
+  ftpLoginUser[0] = '\0';
   ftpCtrlSrv.begin();
   ftpDataSrv.begin();
   ftpActive = true;
@@ -207,6 +216,8 @@ static void ftpSetDrive(bool useSD) {
   ftpOnSD = useSD;
   ftpCwd = "/";
   ftpCmdLine = "";
+  ftpAuthed = false;
+  ftpLoginUser[0] = '\0';
 
   xSemaphoreTake(netMutex, portMAX_DELAY);
   netState.ftpUseSD = useSD;
@@ -220,6 +231,8 @@ static void ftpSetDrive(bool useSD) {
 static void ftpStop() {
   if (ftpCtrlCli) ftpCtrlCli.stop();
   ftpActive = false;
+  ftpAuthed = false;
+  ftpLoginUser[0] = '\0';
 
   xSemaphoreTake(netMutex, portMAX_DELAY);
   netState.ftpRunning = false;
@@ -236,16 +249,51 @@ static void ftpHandleCommand(const String &raw) {
   arg.trim();
 
   if (cmd == "USER") {
+    strncpy(ftpLoginUser, arg.c_str(), sizeof(ftpLoginUser) - 1);
+    ftpLoginUser[sizeof(ftpLoginUser) - 1] = '\0';
+    ftpAuthed = false;
     ftpCtrlCli.print("331 Podaj haslo\r\n");
+    return;
   } else if (cmd == "PASS") {
-    ftpCtrlCli.print("230 Zalogowano\r\n");
+    char cfgU[24], cfgP[24];
+    xSemaphoreTake(netMutex, portMAX_DELAY);
+    strncpy(cfgU, ftpCfgUser, sizeof(cfgU));
+    strncpy(cfgP, ftpCfgPass, sizeof(cfgP));
+    xSemaphoreGive(netMutex);
+    cfgU[sizeof(cfgU) - 1] = '\0';
+    cfgP[sizeof(cfgP) - 1] = '\0';
+
+    if (strcmp(ftpLoginUser, cfgU) == 0 && strcmp(arg.c_str(), cfgP) == 0) {
+      ftpAuthed = true;
+      ftpCtrlCli.print("230 Zalogowano\r\n");
+    } else {
+      ftpAuthed = false;
+      ftpCtrlCli.print("530 Bledny login lub haslo\r\n");
+    }
+    return;
+  } else if (cmd == "QUIT") {
+    ftpAuthed = false;
+    ftpCtrlCli.print("221 Do zobaczenia\r\n");
+    ftpCtrlCli.stop();
+    setFtpStatus(ftpOnSD ? "Dziala (SD :21)" : "Dziala (FL :21)");
+    return;
   } else if (cmd == "SYST") {
     ftpCtrlCli.print("215 UNIX Type: L8\r\n");
+    return;
   } else if (cmd == "FEAT") {
     ftpCtrlCli.print("211-Features:\r\n PASV\r\n SIZE\r\n211 End\r\n");
+    return;
   } else if (cmd == "TYPE" || cmd == "OPTS" || cmd == "NOOP") {
     ftpCtrlCli.print("200 OK\r\n");
-  } else if (cmd == "PWD" || cmd == "XPWD") {
+    return;
+  }
+
+  if (!ftpAuthed) {
+    ftpCtrlCli.print("530 Wymagane logowanie\r\n");
+    return;
+  }
+
+  if (cmd == "PWD" || cmd == "XPWD") {
     ftpCtrlCli.printf("257 \"%s\" is current directory\r\n", ftpCwd.c_str());
   } else if (cmd == "CDUP") {
     int slash = ftpCwd.lastIndexOf('/');
@@ -376,10 +424,6 @@ static void ftpHandleCommand(const String &raw) {
     fsUnlock();
     if (sz >= 0) ftpCtrlCli.printf("213 %ld\r\n", sz);
     else         ftpCtrlCli.print("550 Brak pliku\r\n");
-  } else if (cmd == "QUIT") {
-    ftpCtrlCli.print("221 Do zobaczenia\r\n");
-    ftpCtrlCli.stop();
-    setFtpStatus("Dziala (port 21)");
   } else {
     ftpCtrlCli.print("502 Nieobslugiwane\r\n");
   }
@@ -394,6 +438,8 @@ static void ftpPoll() {
       ftpCtrlCli = nc;
       ftpCmdLine = "";
       ftpCwd = "/";
+      ftpAuthed = false;
+      ftpLoginUser[0] = '\0';
       ftpCtrlCli.print("220 Hollow Star OS FTP Ready\r\n");
       setFtpStatus("Klient polaczony");
     }
@@ -408,7 +454,8 @@ static void ftpPoll() {
       if (ftpCmdLine.length() > 0) ftpHandleCommand(ftpCmdLine);
       ftpCmdLine = "";
       if (!ftpCtrlCli.connected()) {
-        setFtpStatus("Dziala (port 21)");
+        ftpAuthed = false;
+        setFtpStatus(ftpOnSD ? "Dziala (SD :21)" : "Dziala (FL :21)");
         break;
       }
     } else if (ftpCmdLine.length() < 96) {
@@ -498,6 +545,7 @@ void netFtpStartTask() {
   strncpy(netState.ftpStatus,  "Zatrzymany",   sizeof(netState.ftpStatus) - 1);
 
   netMutex = xSemaphoreCreateMutex();
+  netFtpReloadCreds();
   netCmdQueue = xQueueCreate(8, sizeof(NetCmd));
   xTaskCreateAffinitySet(taskNet, "NetFTP", 2048, nullptr, 1, (1 << 0), nullptr);
 }
@@ -507,6 +555,16 @@ void netFtpSendCmd(NetCmdType type, int arg) {
     NetCmd cmd = { type, arg };
     xQueueSend(netCmdQueue, &cmd, 0);
   }
+}
+
+void netFtpReloadCreds() {
+  if (netMutex == nullptr) return;
+  xSemaphoreTake(netMutex, portMAX_DELAY);
+  strncpy(ftpCfgUser, sysConfig.ftpUser[0] ? sysConfig.ftpUser : "hollow", sizeof(ftpCfgUser) - 1);
+  ftpCfgUser[sizeof(ftpCfgUser) - 1] = '\0';
+  strncpy(ftpCfgPass, sysConfig.ftpPass[0] ? sysConfig.ftpPass : "hollow", sizeof(ftpCfgPass) - 1);
+  ftpCfgPass[sizeof(ftpCfgPass) - 1] = '\0';
+  xSemaphoreGive(netMutex);
 }
 
 void netFtpGetSnapshot(NetUiSnapshot &out) {
@@ -533,3 +591,17 @@ bool netFtpConsumeSyncedTime(int &hour, int &minute) {
   xSemaphoreGive(netMutex);
   return ready;
 }
+#else
+// Zwykłe Raspberry Pi Pico (brak modułu CYW43 -> wyłączone Wi-Fi, NTP i FTP)
+void netFtpStartTask() {}
+void netFtpSendCmd(NetCmdType type, int arg) { (void)type; (void)arg; }
+void netFtpReloadCreds() {}
+void netFtpGetSnapshot(NetUiSnapshot &out) {
+  memset(&out, 0, sizeof(out));
+  out.wifiRssi = -127;
+  strncpy(out.wifiStatus, "Brak Wi-Fi (Pico)", sizeof(out.wifiStatus) - 1);
+  strncpy(out.ftpStatus,  "Niedostepne",       sizeof(out.ftpStatus) - 1);
+}
+bool netFtpTakeDirty() { return false; }
+bool netFtpConsumeSyncedTime(int &hour, int &minute) { (void)hour; (void)minute; return false; }
+#endif // HSOS_HAS_WIRELESS

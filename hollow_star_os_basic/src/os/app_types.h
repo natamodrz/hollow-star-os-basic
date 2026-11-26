@@ -1,6 +1,14 @@
 #pragma once
 #include <Arduino.h>
 
+#if defined(ARDUINO_RASPBERRY_PI_PICO_W) || defined(PICO_CYW43_SUPPORTED)
+  #define HSOS_HAS_WIRELESS 1
+  #define HSOS_BOARD_TAG "Pico W"
+#else
+  #define HSOS_HAS_WIRELESS 0
+  #define HSOS_BOARD_TAG "Pico"
+#endif
+
 enum AppState : uint8_t {
   APP_MENU,
   APP_TEMP,
@@ -31,6 +39,8 @@ enum ModalMode : uint8_t {
   MODAL_NONE,
   MODAL_WIFI_PASS,
   MODAL_NEW_MD,
+  MODAL_FTP_USER,
+  MODAL_FTP_PASS,
   MODAL_CONFIRM_DEL,
   MODAL_CONFIRM_FMT
 };

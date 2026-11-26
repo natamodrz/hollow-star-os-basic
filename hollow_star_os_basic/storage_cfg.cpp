@@ -22,6 +22,11 @@ static void setDefaultConfig() {
   sysConfig.wifiSsid[0] = '\0';
   sysConfig.wifiPass[0] = '\0';
   sysConfig.racingHighScore = 0;
+  strncpy(sysConfig.ftpUser, "hollow", sizeof(sysConfig.ftpUser) - 1);
+  sysConfig.ftpUser[sizeof(sysConfig.ftpUser) - 1] = '\0';
+  strncpy(sysConfig.ftpPass, "hollow", sizeof(sysConfig.ftpPass) - 1);
+  sysConfig.ftpPass[sizeof(sysConfig.ftpPass) - 1] = '\0';
+  sysConfig.volume = 75;
 }
 
 void fsLock() {
@@ -145,6 +150,18 @@ bool storageLoadConfig() {
       sysConfig.wifiPass[sizeof(sysConfig.wifiPass) - 1] = '\0';
     } else if (key == "racing_hi") {
       sysConfig.racingHighScore = max(0, (int)val.toInt());
+    } else if (key == "ftp_user") {
+      if (val.length() > 0) {
+        strncpy(sysConfig.ftpUser, val.c_str(), sizeof(sysConfig.ftpUser) - 1);
+        sysConfig.ftpUser[sizeof(sysConfig.ftpUser) - 1] = '\0';
+      }
+    } else if (key == "ftp_pass") {
+      if (val.length() > 0) {
+        strncpy(sysConfig.ftpPass, val.c_str(), sizeof(sysConfig.ftpPass) - 1);
+        sysConfig.ftpPass[sizeof(sysConfig.ftpPass) - 1] = '\0';
+      }
+    } else if (key == "volume") {
+      sysConfig.volume = constrain((int)val.toInt(), 0, 100);
     }
   }
   f.close();
@@ -167,6 +184,9 @@ bool storageSaveConfig() {
   f.printf("ssid=%s\n", sysConfig.wifiSsid);
   f.printf("pass=%s\n", sysConfig.wifiPass);
   f.printf("racing_hi=%d\n", sysConfig.racingHighScore);
+  f.printf("ftp_user=%s\n", sysConfig.ftpUser);
+  f.printf("ftp_pass=%s\n", sysConfig.ftpPass);
+  f.printf("volume=%d\n", sysConfig.volume);
   f.close();
   fsUnlock();
   return true;
@@ -189,7 +209,7 @@ void storageInit() {
   if (flashMounted && !LittleFS.exists("/start.md")) {
     File f = LittleFS.open("/start.md", "w");
     if (f) {
-      f.print("# Hollow Star OS\n## Notatnik MD\n- **F2/Tab**: Podglad\n- **F1/Ctrl+S**: Zapis\n---\n> Gotowy do pracy!\n");
+      f.print("# Hollow Star OS\n## Notatnik MD\n- **F2/Tab**: Podglad\n- **Ctrl+S/F3**: Zapis\n---\n> Gotowy do pracy!\n");
       f.close();
     }
   }
@@ -330,6 +350,47 @@ bool storageWriteText(bool onSD, const char* path, const char* content) {
 bool storageDeletePath(bool onSD, const char* path, bool isDir) {
   fsLock();
   bool ok = isDir ? fsRmdirLocked(onSD, path) : fsRemoveLocked(onSD, path);
+  fsUnlock();
+  return ok;
+}
+
+bool storageExists(bool onSD, const char* path) {
+  fsLock();
+  bool ok = fsExistsLocked(onSD, path);
+  fsUnlock();
+  return ok;
+}
+
+bool storageGetFlashSpace(uint64_t &freeBytes, uint64_t &totalBytes) {
+  freeBytes = 0;
+  totalBytes = 0;
+  fsLock();
+  bool ok = false;
+  if (flashMounted) {
+    FSInfo info;
+    if (LittleFS.info(info)) {
+      totalBytes = info.totalBytes;
+      freeBytes = (info.totalBytes > info.usedBytes) ? (info.totalBytes - info.usedBytes) : 0ULL;
+      ok = true;
+    }
+  }
+  fsUnlock();
+  return ok;
+}
+
+bool storageGetSDSpace(uint64_t &freeBytes, uint64_t &totalBytes) {
+  freeBytes = 0;
+  totalBytes = 0;
+  fsLock();
+  bool ok = false;
+  if (sdMounted) {
+    FSInfo info;
+    if (SDFS.info(info)) {
+      totalBytes = info.totalBytes;
+      freeBytes = (info.totalBytes > info.usedBytes) ? (info.totalBytes - info.usedBytes) : 0ULL;
+      ok = true;
+    }
+  }
   fsUnlock();
   return ok;
 }

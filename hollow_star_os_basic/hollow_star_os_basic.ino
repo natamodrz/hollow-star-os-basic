@@ -92,7 +92,7 @@ void osEnterSuspend() {
 // =========================================================
 void setup() {
   Serial.begin(115200);
-  Serial.println("=== HOLLOW STAR OS BASIC (RP2040 FreeRTOS SMP) ===");
+  Serial.println("=== HOLLOW STAR OS " OS_BRAND_VERSION " (" HSOS_BOARD_TAG " FreeRTOS SMP) ===");
   randomSeed(micros() + analogRead(26));
 
   usbKbdInitQueue();

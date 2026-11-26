@@ -8,7 +8,7 @@
 
 #define OS_BRAND_NAME    "HOLLOW STAR OS"
 #define OS_BRAND_EDITION "BASIC"
-#define OS_BRAND_VERSION "v1.0.0"
+#define OS_BRAND_VERSION "v1.1.0"
 
 enum MdStyle : uint8_t {
   MD_NORMAL,

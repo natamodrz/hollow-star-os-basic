@@ -5,16 +5,17 @@
 #include "../../bt_audio.h"
 #include "../../net_ftp.h"
 
-static int btMenuSel = 0;
-static int wifiMenuSel = 0;
-static int editTimeField = 0;
 static int fmtSel = 0;
 static int pendingFmtTarget = 0;
-static char pendingWifiSsid[36] = {0};
+static int editTimeField = 0;
+static unsigned long lastAboutMs = 0;
 
+#if HSOS_HAS_WIRELESS
+static int btMenuSel = 0;
+static int wifiMenuSel = 0;
+static char pendingWifiSsid[36] = {0};
 static unsigned long lastAnimMs = 0;
 static int animFrame = 0;
-static unsigned long lastAboutMs = 0;
 
 // --- Bluetooth ---
 static bool btTick(unsigned long now) {
@@ -32,6 +33,10 @@ static bool btKey(uint8_t k) {
   if (k == KEY_UP)   btMenuSel = (btMenuSel + totalItems - 1) % totalItems;
   else if (k == KEY_DOWN) btMenuSel = (btMenuSel + 1) % totalItems;
   else if (k == '\n' || k == ' ') {
+    if (audioSnap.btDisabledByJack && btMenuSel != 1 && btMenuSel != 2) {
+      showToast("Wyl. gdy Jack wpiety!");
+      return true;
+    }
     if (btMenuSel == 0 && !audioSnap.btScanning) btAudioSendCmd(ACMD_BT_SCAN);
     else if (btMenuSel == 1) btAudioSendCmd(ACMD_BT_DISCONNECT);
     else if (btMenuSel == 2) btAudioSendCmd(ACMD_BT_CLEAR_PAIRING);
@@ -46,7 +51,9 @@ static void btDraw() {
   rysujPasekStanu();
   d.setFont(u8g2_font_5x7_tr);
 
-  if (audioSnap.btScanning) {
+  if (audioSnap.btDisabledByJack) {
+    d.drawStr(2, 18, "BT wylaczony (Jack)");
+  } else if (audioSnap.btScanning) {
     char anim[24];
     const char* dots[4] = {"", ".", "..", "..."};
     snprintf(anim, sizeof(anim), "Skanuje BT%s", dots[animFrame & 3]);
@@ -76,6 +83,7 @@ static void btDraw() {
       d.drawStr(2, y + 7, line);
     }
   }
+  rysujToastJesliAktywny();
   uiFinishFrame();
 }
 
@@ -166,6 +174,24 @@ static void wifiDraw() {
   if (modalGetMode() != MODAL_NONE) rysujModal();
   uiFinishFrame();
 }
+#else
+static bool btTick(unsigned long) { return false; }
+static bool btKey(uint8_t k) { if (k == KEY_ESC) uiSetScreen(APP_SETTINGS_MENU); return true; }
+static void btDraw() {
+  U8G2 &d = uiDisplay();
+  d.clearBuffer(); rysujPasekStanu();
+  d.setFont(u8g2_font_5x7_tr); d.drawStr(4, 30, "Brak BT (Pico)");
+  uiFinishFrame();
+}
+static bool wifiTick(unsigned long) { return false; }
+static bool wifiKey(uint8_t k) { if (k == KEY_ESC) uiSetScreen(APP_SETTINGS_MENU); return true; }
+static void wifiDraw() {
+  U8G2 &d = uiDisplay();
+  d.clearBuffer(); rysujPasekStanu();
+  d.setFont(u8g2_font_5x7_tr); d.drawStr(4, 30, "Brak Wi-Fi (Pico)");
+  uiFinishFrame();
+}
+#endif
 
 // --- Kontrast ---
 static bool contrastKey(uint8_t k) {
@@ -299,7 +325,7 @@ static void formatDraw() {
   uiFinishFrame();
 }
 
-// --- About (branding + wolny RAM) ---
+// --- About ---
 static void aboutEnter() { lastAboutMs = millis(); }
 
 static bool aboutTick(unsigned long now) {
@@ -328,10 +354,14 @@ static void aboutDraw() {
   d.setFont(u8g2_font_6x10_tr);
   d.drawStr(23, 20, OS_BRAND_NAME);
   d.setFont(u8g2_font_5x7_tr);
-  d.drawStr(23, 29, OS_BRAND_EDITION " " OS_BRAND_VERSION " | RP2040 SMP");
+  d.drawStr(23, 29, OS_BRAND_EDITION " " OS_BRAND_VERSION " | " HSOS_BOARD_TAG);
 
   d.drawHLine(4, 32, 120);
-  d.drawStr(4, 41, "BT A2DP | WiFi NTP | FTP");
+#if HSOS_HAS_WIRELESS
+  d.drawStr(4, 41, "BT A2DP | Jack | WiFi FTP");
+#else
+  d.drawStr(4, 41, "PWM Jack | SD | LittleFS");
+#endif
   d.drawStr(4, 50, ramLine);
   d.drawStr(14, 62, "Esc:Powrot  F1:Skroty");
   uiFinishFrame();
