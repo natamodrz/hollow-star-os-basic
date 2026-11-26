@@ -67,7 +67,7 @@ static bool filesKey(uint8_t k) {
         char full[128];
         buildFullPath(appScratch.files.items[fmSel].name, full, sizeof(full));
         bool ok = storageDeletePath(fmOnSD, full, appScratch.files.items[fmSel].isDir);
-        showToast(ok ? "Usunieto!" : "Blad usuwania");
+        showToast(ok ? tr("Deleted!", "Usunieto!") : tr("Delete error", "Blad usuwania"));
         appFilesRefresh();
       }
       modalClose();
@@ -89,18 +89,18 @@ static bool filesKey(uint8_t k) {
       appFilesRefresh();
     }
   } else if (k == KEY_F2 || k == 'n' || k == 'N') {
-    modalOpenInput(MODAL_NEW_MD, "Nowy plik (.md):");
+    modalOpenInput(MODAL_NEW_MD, tr("New file (.md):", "Nowy plik (.md):"));
   } else if (k == 'r' || k == 'R') {
     if (fmOnSD) {
       bool ok = storageMountSD();
-      showToast(ok ? "SD odswiezona!" : "Brak karty SD!");
+      showToast(ok ? tr("SD mounted!", "SD odswiezona!") : tr("No SD card!", "Brak karty SD!"));
     } else {
-      showToast("Odswiezono Flash");
+      showToast(tr("Flash refreshed", "Odswiezono Flash"));
     }
     appFilesRefresh();
   } else if (k == KEY_DEL && fmCount > 0) {
     char title[26];
-    snprintf(title, sizeof(title), "Usun: %.18s", appScratch.files.items[fmSel].name);
+    snprintf(title, sizeof(title), "%s %.18s", tr("Del:", "Usun:"), appScratch.files.items[fmSel].name);
     modalOpenConfirm(MODAL_CONFIRM_DEL, title);
   } else if (fmCount > 0) {
     if (k == KEY_UP)        fmSel = (fmSel + fmCount - 1) % fmCount;
@@ -118,9 +118,9 @@ static bool filesKey(uint8_t k) {
         appNotesOpenFile(fmOnSD, full, APP_FILES, hasExtCI(item.name, ".md"));
       } else if (hasExtCI(item.name, ".mp3") && fmOnSD) {
         btAudioPlayPath(full);
-        showToast("Odtwarzam MP3...");
+        showToast(tr("Playing MP3...", "Odtwarzam MP3..."));
       } else {
-        showToast("Nieobslugiwany format");
+        showToast(tr("Unsupported file", "Nieobslugiwany format"));
       }
     }
   }
@@ -139,7 +139,9 @@ static void filesDraw() {
   d.drawHLine(0, 20, 128);
 
   if (fmCount == 0) {
-    d.drawStr(4, 34, (fmOnSD && !sdMounted) ? "Brak karty SD!" : "(Pusty katalog)");
+    d.drawStr(4, 34, (fmOnSD && !sdMounted)
+                     ? tr("No SD card!", "Brak karty SD!")
+                     : tr("(Empty folder)", "(Pusty katalog)"));
   } else {
     int startIdx = max(0, min(fmSel - 1, fmCount - 3));
     for (int i = 0; i < 3 && (startIdx + i) < fmCount; i++) {
@@ -162,14 +164,23 @@ static void filesDraw() {
   }
 
   d.drawHLine(0, 53, 128);
-  d.drawStr(2, 62, "Tab:Dysk N:Nowy F1:Pom");
+  d.drawStr(2, 62, tr("Tab:Drv N:New F1:Help", "Tab:Dysk N:Nowy F1:Pom"));
 
   if (modalGetMode() != MODAL_NONE) rysujModal();
   rysujToastJesliAktywny();
   uiFinishFrame();
 }
 
-static const char* const HELP_FILES[] = {
+static const char* const HELP_FILES_EN[] = {
+  "^ / v: Select item",
+  "Enter: Open / Play MP3",
+  "Tab: Switch Flash / SD",
+  "N or F2: New .md file",
+  "R: Refresh / Mount SD",
+  "Del: Delete | Bksp: Up",
+  "Esc: Main menu"
+};
+static const char* const HELP_FILES_PL[] = {
   "^ / v: Wybor pliku/kat.",
   "Enter: Otworz / Graj MP3",
   "Tab: Zmien Flash / SD",
@@ -179,4 +190,4 @@ static const char* const HELP_FILES[] = {
   "Esc: Menu glowne"
 };
 
-const AppScreen screenAppFiles = { nullptr, nullptr, filesKey, filesDraw, HELP_FILES, 7 };
+const AppScreen screenAppFiles = { nullptr, nullptr, filesKey, filesDraw, HELP_FILES_EN, HELP_FILES_PL, 7 };

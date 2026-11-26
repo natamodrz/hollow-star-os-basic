@@ -16,7 +16,7 @@ static void ftpSwitchDrive() {
   if (netSnap.ftpRunning) {
     netFtpSendCmd(NCMD_FTP_SET_DRIVE, ftpDriveSD ? 1 : 0);
   }
-  showToast(ftpDriveSD ? "Dysk: Karta SD" : "Dysk: Flash");
+  showToast(ftpDriveSD ? tr("Drive: SD Card", "Dysk: Karta SD") : tr("Drive: Flash", "Dysk: Flash"));
 }
 
 static bool ftpKey(uint8_t k) {
@@ -30,9 +30,9 @@ static bool ftpKey(uint8_t k) {
         sysConfig.ftpUser[sizeof(sysConfig.ftpUser) - 1] = '\0';
         storageSaveConfig();
         netFtpReloadCreds();
-        showToast("Zapisano login FTP!");
+        showToast(tr("FTP user saved!", "Zapisano login FTP!"));
       } else {
-        showToast("Login nie moze byc pusty");
+        showToast(tr("User cannot be empty", "Login nie moze byc pusty"));
       }
       modalClose();
     } else if (submitted && modalGetMode() == MODAL_FTP_PASS) {
@@ -42,9 +42,9 @@ static bool ftpKey(uint8_t k) {
         sysConfig.ftpPass[sizeof(sysConfig.ftpPass) - 1] = '\0';
         storageSaveConfig();
         netFtpReloadCreds();
-        showToast("Zapisano haslo FTP!");
+        showToast(tr("FTP pass saved!", "Zapisano haslo FTP!"));
       } else {
-        showToast("Haslo nie moze byc puste");
+        showToast(tr("Pass cannot be empty", "Haslo nie moze byc puste"));
       }
       modalClose();
     }
@@ -57,16 +57,16 @@ static bool ftpKey(uint8_t k) {
     return true;
   }
   if (k == 'u' || k == 'U') {
-    modalOpenInput(MODAL_FTP_USER, "Uzytkownik FTP:", sysConfig.ftpUser);
+    modalOpenInput(MODAL_FTP_USER, tr("FTP Username:", "Uzytkownik FTP:"), sysConfig.ftpUser);
     return true;
   }
   if (k == 'p' || k == 'P') {
-    modalOpenInput(MODAL_FTP_PASS, "Haslo FTP:", sysConfig.ftpPass);
+    modalOpenInput(MODAL_FTP_PASS, tr("FTP Password:", "Haslo FTP:"), sysConfig.ftpPass);
     return true;
   }
   if (k == 'r' || k == 'R') {
     bool ok = storageMountSD();
-    showToast(ok ? "SD zamontowana!" : "Brak karty SD!");
+    showToast(ok ? tr("SD mounted!", "SD zamontowana!") : tr("No SD card!", "Brak karty SD!"));
     return true;
   }
   if (k == '\n' || k == ' ') {
@@ -83,12 +83,12 @@ static void ftpDraw() {
   rysujPasekStanu();
   d.setFont(u8g2_font_5x7_tr);
 
-  d.drawStr(2, 17, "SERWER FTP (PASV :21)");
+  d.drawStr(2, 17, tr("FTP SERVER (PASV :21)", "SERWER FTP (PASV :21)"));
   char buf[28];
   if (ftpDriveSD) {
-    snprintf(buf, sizeof(buf), "Dysk:<Karta SD> %s", sdMounted ? "OK" : "BRAK");
+    snprintf(buf, sizeof(buf), "%s<SD Card> %s", tr("Drv:", "Dysk:"), sdMounted ? "OK" : tr("NO", "BRAK"));
   } else {
-    snprintf(buf, sizeof(buf), "Dysk:<Flash LittleFS>");
+    snprintf(buf, sizeof(buf), "%s<Flash LittleFS>", tr("Drv:", "Dysk:"));
   }
   d.drawStr(2, 26, buf);
 
@@ -97,22 +97,32 @@ static void ftpDraw() {
     d.drawStr(2, 34, buf);
     d.drawStr(2, 42, netSnap.ftpStatus);
   } else {
-    d.drawStr(2, 34, "Brak Wi-Fi! Ustaw w");
-    d.drawStr(2, 42, "Ustawienia -> Wi-Fi");
+    d.drawStr(2, 34, tr("No Wi-Fi! Configure in", "Brak Wi-Fi! Ustaw w"));
+    d.drawStr(2, 42, tr("Settings -> Wi-Fi", "Ustawienia -> Wi-Fi"));
   }
 
   snprintf(buf, sizeof(buf), "U:%.8s  P:%.8s", sysConfig.ftpUser, sysConfig.ftpPass);
   d.drawStr(2, 51, buf);
 
   d.drawHLine(0, 53, 128);
-  d.drawStr(2, 62, netSnap.ftpRunning ? "Ent:Stop U/P:Kont </>:D" : "Ent:Start U/P:Kont F1:?");
+  d.drawStr(2, 62, netSnap.ftpRunning
+                   ? tr("Ent:Stop U/P:Acct </>:D", "Ent:Stop U/P:Kont </>:D")
+                   : tr("Ent:Start U/P:Acct F1:?", "Ent:Start U/P:Kont F1:?"));
 
   if (modalGetMode() != MODAL_NONE) rysujModal();
   rysujToastJesliAktywny();
   uiFinishFrame();
 }
 
-static const char* const HELP_FTP[] = {
+static const char* const HELP_FTP_EN[] = {
+  "</>/Tab/D: Flash / SD",
+  "U: Edit FTP username",
+  "P: Edit FTP password",
+  "Enter/Spc: Start / Stop",
+  "R: Mount / Refresh SD",
+  "Esc: Tools menu"
+};
+static const char* const HELP_FTP_PL[] = {
   "</>/Tab/D: Zmien Flash/SD",
   "U: Zmien uzytkownika FTP",
   "P: Zmien haslo FTP",
@@ -121,7 +131,7 @@ static const char* const HELP_FTP[] = {
   "Esc: Menu narzedzi"
 };
 
-const AppScreen screenAppFtp = { nullptr, nullptr, ftpKey, ftpDraw, HELP_FTP, 6 };
+const AppScreen screenAppFtp = { nullptr, nullptr, ftpKey, ftpDraw, HELP_FTP_EN, HELP_FTP_PL, 6 };
 
 #else
 
@@ -135,11 +145,11 @@ static void ftpDraw() {
   d.clearBuffer();
   rysujPasekStanu();
   d.setFont(u8g2_font_5x7_tr);
-  d.drawStr(4, 30, "Brak Wi-Fi (Pico)");
-  d.drawStr(4, 62, "Esc: Powrot");
+  d.drawStr(4, 30, "No Wi-Fi (Pico)");
+  d.drawStr(4, 62, "Esc: Back");
   uiFinishFrame();
 }
 
-const AppScreen screenAppFtp = { nullptr, nullptr, ftpKey, ftpDraw, nullptr, 0 };
+const AppScreen screenAppFtp = { nullptr, nullptr, ftpKey, ftpDraw, nullptr, nullptr, 0 };
 
 #endif

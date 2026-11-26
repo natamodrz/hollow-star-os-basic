@@ -27,6 +27,8 @@ static void setDefaultConfig() {
   strncpy(sysConfig.ftpPass, "hollow", sizeof(sysConfig.ftpPass) - 1);
   sysConfig.ftpPass[sizeof(sysConfig.ftpPass) - 1] = '\0';
   sysConfig.volume = 75;
+  sysConfig.lang = 0;
+  sysConfig.setupDone = false;
 }
 
 void fsLock() {
@@ -162,6 +164,10 @@ bool storageLoadConfig() {
       }
     } else if (key == "volume") {
       sysConfig.volume = constrain((int)val.toInt(), 0, 100);
+    } else if (key == "lang") {
+      sysConfig.lang = (val.toInt() == 1) ? 1 : 0;
+    } else if (key == "setup_done") {
+      sysConfig.setupDone = (val.toInt() != 0);
     }
   }
   f.close();
@@ -187,6 +193,8 @@ bool storageSaveConfig() {
   f.printf("ftp_user=%s\n", sysConfig.ftpUser);
   f.printf("ftp_pass=%s\n", sysConfig.ftpPass);
   f.printf("volume=%d\n", sysConfig.volume);
+  f.printf("lang=%d\n", (int)sysConfig.lang);
+  f.printf("setup_done=%d\n", sysConfig.setupDone ? 1 : 0);
   f.close();
   fsUnlock();
   return true;
@@ -209,7 +217,7 @@ void storageInit() {
   if (flashMounted && !LittleFS.exists("/start.md")) {
     File f = LittleFS.open("/start.md", "w");
     if (f) {
-      f.print("# Hollow Star OS\n## Notatnik MD\n- **F2/Tab**: Podglad\n- **Ctrl+S/F3**: Zapis\n---\n> Gotowy do pracy!\n");
+      f.print("# Hollow Star OS\n## Notes MD\n- **F2/Tab**: Preview\n- **Ctrl+S/F3**: Save\n---\n> Ready to work!\n");
       f.close();
     }
   }

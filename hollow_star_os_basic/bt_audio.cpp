@@ -601,17 +601,17 @@ static void syncAudioRouting(bool forceApply = false) {
   if (currentSink == ASINK_JACK) {
     sharedState.btConnected = false;
     sharedState.btScanning = false;
-    strncpy(sharedState.btStatus, "Wylaczony (Jack)", sizeof(sharedState.btStatus) - 1);
+    strncpy(sharedState.btStatus, "Disabled (Jack)", sizeof(sharedState.btStatus) - 1);
   } else {
     bool c = btInitialized && a2dp.connected();
     sharedState.btConnected = c;
-    strncpy(sharedState.btStatus, c ? "Polaczono!" : (btInitialized ? "Rozlaczono" : "Wylaczony"),
+    strncpy(sharedState.btStatus, c ? "Connected" : (btInitialized ? "Disconnected" : "Off"),
             sizeof(sharedState.btStatus) - 1);
   }
 #else
   sharedState.btDisabledByJack = true;
   sharedState.btConnected = false;
-  strncpy(sharedState.btStatus, "Brak BT (Pico)", sizeof(sharedState.btStatus) - 1);
+  strncpy(sharedState.btStatus, "No BT (Pico)", sizeof(sharedState.btStatus) - 1);
 #endif
   xSemaphoreGive(stateMutex);
   markDirty();
@@ -785,7 +785,7 @@ static void internalPlayTrack(int idx) {
 #if HSOS_HAS_WIRELESS
 static void internalBtScan() {
   if (currentSink == ASINK_JACK) {
-    setBtStatus("Odlacz sluchawki!");
+    setBtStatus("Unplug jack!");
     return;
   }
   internalMusicStop();
@@ -798,7 +798,7 @@ static void internalBtScan() {
   markDirty();
 
   btEnsureInit();
-  setBtStatus("Skanowanie 5s...");
+  setBtStatus("Scanning 5s...");
 
   auto found = a2dp.scan(BluetoothHCI::any_cod, 5);
 
@@ -815,14 +815,14 @@ static void internalBtScan() {
     sharedState.btDevCount++;
   }
   sharedState.btScanning = false;
-  snprintf(sharedState.btStatus, sizeof(sharedState.btStatus), "Znaleziono: %d", sharedState.btDevCount);
+  snprintf(sharedState.btStatus, sizeof(sharedState.btStatus), "Found: %d", sharedState.btDevCount);
   xSemaphoreGive(stateMutex);
   markDirty();
 }
 
 static void internalBtConnectIdx(int idx) {
   if (currentSink == ASINK_JACK) {
-    setBtStatus("Odlacz sluchawki!");
+    setBtStatus("Unplug jack!");
     return;
   }
 
@@ -845,7 +845,7 @@ static void internalBtConnectIdx(int idx) {
   }
 
   char msg[24];
-  snprintf(msg, sizeof(msg), "Lacze: %.14s", targetName);
+  snprintf(msg, sizeof(msg), "Conn: %.14s", targetName);
   setBtStatus(msg);
 
   bool ok = false;
@@ -854,7 +854,7 @@ static void internalBtConnectIdx(int idx) {
     ok = a2dp.connect(targetAddr);
   }
   if (!ok) {
-    setBtStatus("Blad polaczenia");
+    setBtStatus("Connect error");
   }
 }
 #endif // HSOS_HAS_WIRELESS
@@ -978,14 +978,14 @@ static void taskAudioBT(void *pvParams) {
 #if HSOS_HAS_WIRELESS
           if (currentSink == ASINK_BT) internalMusicStop();
           if (btInitialized) a2dp.disconnect();
-          if (currentSink != ASINK_JACK) setBtStatus("Rozlaczono");
+          if (currentSink != ASINK_JACK) setBtStatus("Disconnected");
 #endif
           break;
         case ACMD_BT_CLEAR_PAIRING:
 #if HSOS_HAS_WIRELESS
           if (currentSink == ASINK_BT) internalMusicStop();
           if (btInitialized) a2dp.clearPairing();
-          if (currentSink != ASINK_JACK) setBtStatus("Pary usuniete");
+          if (currentSink != ASINK_JACK) setBtStatus("Pairing cleared");
 #endif
           break;
       }
@@ -1001,7 +1001,7 @@ static void taskAudioBT(void *pvParams) {
       xSemaphoreTake(stateMutex, portMAX_DELAY);
       sharedState.btConnected = nowConn;
       if (currentSink != ASINK_JACK) {
-        strncpy(sharedState.btStatus, nowConn ? "Polaczono!" : "Rozlaczono", sizeof(sharedState.btStatus) - 1);
+        strncpy(sharedState.btStatus, nowConn ? "Connected" : "Disconnected", sizeof(sharedState.btStatus) - 1);
         sharedState.btStatus[sizeof(sharedState.btStatus) - 1] = '\0';
       }
       xSemaphoreGive(stateMutex);
@@ -1106,9 +1106,9 @@ void btAudioStartTask() {
   memset(&sharedState, 0, sizeof(sharedState));
   memset(trackNames, 0, sizeof(trackNames));
 #if HSOS_HAS_WIRELESS
-  strncpy(sharedState.btStatus, "Wylaczony", sizeof(sharedState.btStatus) - 1);
+  strncpy(sharedState.btStatus, "Off", sizeof(sharedState.btStatus) - 1);
 #else
-  strncpy(sharedState.btStatus, "Brak BT (Pico)", sizeof(sharedState.btStatus) - 1);
+  strncpy(sharedState.btStatus, "No BT (Pico)", sizeof(sharedState.btStatus) - 1);
 #endif
   sharedState.playingIdx = -1;
   sharedState.volume = (uint8_t)constrain(sysConfig.volume, 0, 100);

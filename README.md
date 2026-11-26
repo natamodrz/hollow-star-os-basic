@@ -1,24 +1,61 @@
 # Hollow Star OS Basic
 
-A compact, sharp-pixel embedded operating system for the **Raspberry Pi Pico & Raspberry Pi Pico W (RP2040)** running on **FreeRTOS SMP** (Arduino-Pico core v6.4.0), featuring a 128×64 monochrome LCD UI, USB 2.4 GHz keyboard input via PIO, dual **Bluetooth A2DP + 3.5 mm PWM Stereo Headphone Jack** MP3 playback, Wi-Fi + NTP clock sync, authenticated PASV FTP server, Markdown notes creator/editor, dual-drive file explorer, expression calculator, system resource monitor, and classic retro games.
+> [!WARNING]
+> **Vibe-Coded Project Notice:** This project is **vibe-coded** — built and iterated rapidly with AI coding assistance (`Google Antigravity`). While verified to compile cleanly for both Raspberry Pi Pico and Pico W, treat it as experimental hobby firmware: inspect the code and wiring before use, keep backups of important SD card data, and report or PR any edge-case bugs you encounter!
+
+A compact, sharp-pixel embedded operating system for the **Raspberry Pi Pico & Raspberry Pi Pico W (RP2040)** running on **FreeRTOS SMP** (Arduino-Pico core v6.4.0), featuring a 128×64 monochrome LCD UI, USB 2.4 GHz keyboard input via PIO, dual **Bluetooth A2DP + 3.5 mm PWM Stereo Headphone Jack** audio, Wi-Fi + NTP clock sync, an authenticated PASV FTP server, a **First-Time Setup Wizard**, full **English / Polish (`EN`/`PL`)** bilingual UI, Markdown notes, dual-drive file explorer, expression calculator, system monitor, and classic retro games.
+
+---
+
+## Demo & Hardware Setup
+
+| Full Breadboard Setup (Pico W + Keyboard + ST7565 + BT Headphones) | About Screen (`ST7565` LCD) |
+| :---: | :---: |
+| ![Breadboard setup with Redragon wireless keyboard, ST7565 LCD, Pico W, powerbank and Bluetooth headphones](docs/demo/demo-setup.jpg) | ![Hollow Star OS About screen showing version and free RAM](docs/demo/demo-about.jpg) |
+
+| Brick Breaker | Tetris | Brick Game Racing |
+| :---: | :---: | :---: |
+| ![Brick Breaker running on Hollow Star OS](docs/demo/demo-brick-breaker.jpg) | ![Tetris running on Hollow Star OS](docs/demo/demo-tetris.jpg) | ![Brick Game Racing running on Hollow Star OS](docs/demo/demo-racing.jpg) |
 
 ---
 
 ## Features
 
-- **Pico & Pico W Support**:
-  - **Raspberry Pi Pico W (`hollow-star-os-picow-v1.1.0.uf2`)**: Full feature set including Wi-Fi, NTP clock sync, FTP server, Bluetooth A2DP audio, and 3.5 mm Headphone Jack output.
-  - **Raspberry Pi Pico (`hollow-star-os-pico-v1.1.0.uf2`)**: Clean build without CYW43 dependencies — Bluetooth, Wi-Fi, NTP, and FTP UI options are hidden automatically while MP3 playback works over the 3.5 mm Headphone Jack.
-- **Audio Player & Headphone Jack Auto-Switch (`BT A2DP` / `PWM Jack`)**:
-  - Plugging headphones/speakers into the 3.5 mm jack (`GP8` active-LOW detect) automatically disconnects and disables Bluetooth and routes audio to `PWMAudio` stereo (`GP6` = L, `GP7` = R).
-  - Manual output override (`O` key: `AUTO` / `JACK` / `BT`), smooth synchronized `MP3DecoderHelix` playback with `ID3v2` skip, 512-byte aligned BT streaming (`24 KB` A2DP ring buffer, priority-2 audio task), dynamic `0–100%` software volume (`←`/`→` or `-`/`+`), animated equalizer, progress bar, and elapsed timer.
-- **Sys Info Monitor**: Live RP2040 CPU temperature, used/total heap RAM (`KB` & `%`), and free/total capacity on both internal Flash (`LittleFS`) and FAT32 SD card.
-- **Markdown Notes (`.md`) with Location & File Creator**: Launch Notes to pick drive (`Flash` / `SD`), folder, and filename first, then edit an empty `.md` file (`Ctrl+S` / `F3` save) or toggle live formatted Markdown preview (`Tab` / `F2`).
-- **Authenticated PASV FTP Server (Pico W)**: Live Flash/SD drive switching (`←` / `→` / `Tab` / `D`), SD remount (`R`), and configurable FTP username/password (`U` / `P`, default `hollow` / `hollow`).
-- **Dual-Drive File Explorer**: Browse Flash (`LittleFS`) and FAT32 (`SD`), create `.md` files (`N` / `F2`), edit text/config files, play `.mp3` files from SD, and delete files (`Del`).
-- **Expression Calculator**: Multi-operator math expressions with parentheses, precedence, powers (`^` / `P`), square & cube roots (`sqrt` via `R`/`S`, `cbrt` via `Q`), and decimal/fraction output toggle (`F2`).
-- **Custom Sharp-Pixel UI (`U8g2`) & Universal `F1` Help**: Zero rounded corners, boot splash, persistent top status bar (USB keyboard, `HH:MM`, Wi-Fi bars on Pico W, active BT/Headphone icon), and context-sensitive `F1` keyboard shortcuts overlay on every screen.
-- **Classic Games & Hardware Suspend**: Brick Breaker, Tetris, Brick Game Racing, and LCD hardware power-save (`setPowerSave(1)`).
+- **First-Time Setup Wizard (`v1.2.0`)**:
+  - Automatically runs on first boot (or anytime from **Settings -> Language -> Run 1st Setup Wizard**):
+    1. **Language Selection**: `English (Default)` or `Polski`
+    2. **Wi-Fi Setup** *(Pico W only)*: Scan networks, enter password, connect, and auto-sync time via NTP (or skip)
+    3. **Time Setup**: Manual `HH:MM` clock configuration (pre-filled if synced via NTP)
+    4. **Welcome Screen**: Hollow Star branded `Welcome!` / `Witaj!` card
+- **Bilingual OS (`English` / `Polski`)**: English by default across all menus, apps, settings, games, and `F1` help overlays, with instant switching to Polish in 1st Setup or **Settings -> Language**.
+- **Raspberry Pi Pico & Pico W Builds**:
+  - **Pico W (`hollow-star-os-picow-v1.2.0.uf2`)**: Full wireless suite (Bluetooth A2DP, Wi-Fi, NTP, FTP server) + 3.5 mm Headphone Jack.
+  - **Standard Pico (`hollow-star-os-pico-v1.2.0.uf2`)**: Clean build without CYW43 — Bluetooth, Wi-Fi, NTP, and FTP UI menus are automatically hidden, while MP3 playback works over the 3.5 mm Headphone Jack.
+- **Audio Player & 3.5 mm Headphone Jack (`BT A2DP` / `PWM Jack`)**:
+  - Plugging headphones/speakers into the 3.5 mm jack (`GP8` active-LOW detect) automatically disables Bluetooth and routes PCM audio to stereo PWM (`GP6` = L, `GP7` = R).
+  - Manual output override (`O`: `AUTO` / `JACK` / `BT`), synchronized `MP3DecoderHelix` playback with `ID3v2` skip, 512-byte aligned A2DP writes (`24 KB` ring buffer, priority-2 audio task), `0–100%` software volume (`←`/`→` or `-`/`+`), animated 4-band equalizer, progress bar, and elapsed timer.
+- **Sys Info Monitor**: Live RP2040 CPU temperature, used/total heap RAM (`KB` & `%`), and free/total capacity on Flash (`LittleFS`) and FAT32 SD card.
+- **Markdown Notes (`.md`)**: Launch Notes to pick drive (`Flash` / `SD`), folder, and filename first, then edit an empty `.md` file (`Ctrl+S` / `F3` save) or toggle live Markdown preview (`Tab` / `F2`).
+- **Authenticated PASV FTP Server *(Pico W)***: Live Flash/SD drive switching (`←` / `→` / `Tab` / `D`), SD remount (`R`), and configurable FTP username/password (`U` / `P`, default `hollow` / `hollow`).
+- **Dual-Drive File Explorer, Expression Calculator & Classic Games**: Browse Flash & SD, compute expressions (`+ - * / ( ) ^ sqrt cbrt` + fraction toggle `F2`), and play Brick Breaker, Tetris, and Racing.
+- **Sharp-Pixel UI & Universal `F1` Help**: Zero rounded corners, boot splash, status bar, hardware suspend (`setPowerSave(1)`), and context-sensitive `F1` shortcuts help on every screen.
+
+---
+
+## Prebuilt Firmware Downloads (`.uf2`)
+
+Prebuilt flashable `.uf2` binaries (`Pico` and `Pico W`) are published directly in **[GitHub Releases](../../releases)**:
+1. Download `hollow-star-os-picow-<version>.uf2` (for **Raspberry Pi Pico W**) or `hollow-star-os-pico-<version>.uf2` (for **Raspberry Pi Pico**).
+2. Hold **BOOTSEL**, plug the Pico into USB, and drag-and-drop the `.uf2` file onto the `RPI-RP2` drive.
+
+---
+
+## Versioning Policy
+
+This repository follows strict **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
+- **`MAJOR`**: Major architectural rewrites or breaking changes
+- **`MINOR`**: New features (e.g. `v1.1.0` PWM Jack & Sys Info, `v1.2.0` 1st Setup & English/Polish i18n)
+- **`PATCH`**: Small fixes and refinements
 
 ---
 
@@ -32,16 +69,6 @@ A compact, sharp-pixel embedded operating system for the **Raspberry Pi Pico & R
 | **3.5 mm Headphone Jack (`PWM`)** | `L=GP6`, `R=GP7`, `Detect=GP8`, `GND=GND` | `62.5 kHz` PWM + RC filter, `GP8` `INPUT_PULLUP` active LOW |
 
 Full wiring diagrams and the passive RC audio filter schematic are in [docs/wiring.md](docs/wiring.md).
-
----
-
-## Flashable Prebuilt Firmware (`.uf2`)
-
-Prebuilt `.uf2` images are included in [releases/](releases/):
-- **Raspberry Pi Pico W**: `releases/hollow-star-os-picow-v1.1.0.uf2`
-- **Raspberry Pi Pico**: `releases/hollow-star-os-pico-v1.1.0.uf2`
-
-Hold **BOOTSEL**, plug in the Pico over USB, and copy the matching `.uf2` file onto the `RPI-RP2` drive.
 
 ---
 
@@ -61,7 +88,7 @@ Hold **BOOTSEL**, plug in the Pico over USB, and copy the matching `.uf2` file o
 ./pico.sh build picow
 ./pico.sh build pico
 
-# Build both release .uf2 files into releases/
+# Build both release .uf2 files into build/
 ./pico.sh release
 
 # Compile and flash directly
@@ -84,18 +111,11 @@ Hold **BOOTSEL**, plug in the Pico over USB, and copy the matching `.uf2` file o
 | **Music Player** | `←` / `→` / `-` / `+` / `Tab` / `O` | Volume -/+ / Player↔Playlist / Output (`AUTO`/`JACK`/`BT`) |
 | **Notes (`.md`)** | `↑` / `↓` / `←` / `→` / `Enter` / `F3` | Setup Drive, Folder, Name / Edit empty or open existing |
 | **Notes Editor** | `Ctrl+S` or `F3` / `Tab` or `F2` | Save `.md` / Toggle Markdown preview |
-| **FTP Server (Pico W)** | `U` / `P` / `←` `→` `D` / `Enter` / `R` | Set User / Set Password / Flash↔SD / Start-Stop / Remount SD |
+| **FTP Server *(Pico W)*** | `U` / `P` / `←` `→` `D` / `Enter` / `R` | Set User / Set Password / Flash↔SD / Start-Stop / Remount SD |
 | **Sys Info** | `R` / `Esc` | Refresh Flash & SD space / Menu |
-
----
-
-## Architecture Notes
-
-- **Header Isolation**: `Adafruit_TinyUSB.h` (`usb_kbd.cpp`) and `BluetoothAudio.h` (`bt_audio.cpp`) stay in strictly isolated translation units.
-- **Core Affinity**: Core 1 drives `USBHost.task()`, while Core 0 handles UI (`loop()`), `TaskAudioBT` (priority 2, synchronous `MP3DecoderHelix` -> A2DP SBC or `PWMAudio` DMA), and `TaskNet` (Pico W only). Shared Flash/SD access uses `fsLock()` / `fsUnlock()`.
 
 ---
 
 ## License
 
-Licensed under the **GNU General Public License v3.0 (GPL-3.0)** — see [LICENSE](LICENSE).
+Licensed under the **GNU General Public License v3.0 (GPL-3.0)** — see the [LICENSE](LICENSE) file.

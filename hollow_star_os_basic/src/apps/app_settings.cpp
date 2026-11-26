@@ -8,6 +8,7 @@
 static int fmtSel = 0;
 static int pendingFmtTarget = 0;
 static int editTimeField = 0;
+static int langOptSel = 0;
 static unsigned long lastAboutMs = 0;
 
 #if HSOS_HAS_WIRELESS
@@ -34,7 +35,7 @@ static bool btKey(uint8_t k) {
   else if (k == KEY_DOWN) btMenuSel = (btMenuSel + 1) % totalItems;
   else if (k == '\n' || k == ' ') {
     if (audioSnap.btDisabledByJack && btMenuSel != 1 && btMenuSel != 2) {
-      showToast("Wyl. gdy Jack wpiety!");
+      showToast(tr("Unplug jack first!", "Wyl. gdy Jack wpiety!"));
       return true;
     }
     if (btMenuSel == 0 && !audioSnap.btScanning) btAudioSendCmd(ACMD_BT_SCAN);
@@ -52,11 +53,11 @@ static void btDraw() {
   d.setFont(u8g2_font_5x7_tr);
 
   if (audioSnap.btDisabledByJack) {
-    d.drawStr(2, 18, "BT wylaczony (Jack)");
+    d.drawStr(2, 18, tr("BT disabled (Jack)", "BT wylaczony (Jack)"));
   } else if (audioSnap.btScanning) {
     char anim[24];
     const char* dots[4] = {"", ".", "..", "..."};
-    snprintf(anim, sizeof(anim), "Skanuje BT%s", dots[animFrame & 3]);
+    snprintf(anim, sizeof(anim), "%s%s", tr("Scanning BT", "Skanuje BT"), dots[animFrame & 3]);
     d.drawStr(2, 18, anim);
   } else {
     d.drawStr(2, 18, audioSnap.btStatus);
@@ -69,9 +70,9 @@ static void btDraw() {
   for (int i = 0; i < 4 && (startIdx + i) < totalItems; i++) {
     int idx = startIdx + i, y = 22 + i * 10;
     char line[28];
-    if (idx == 0)      snprintf(line, sizeof(line), "[Skanuj urzadzenia]");
-    else if (idx == 1) snprintf(line, sizeof(line), "[Rozlacz audio]");
-    else if (idx == 2) snprintf(line, sizeof(line), "[Wyczysc parowanie]");
+    if (idx == 0)      snprintf(line, sizeof(line), "%s", tr("[Scan BT devices]", "[Skanuj urzadzenia]"));
+    else if (idx == 1) snprintf(line, sizeof(line), "%s", tr("[Disconnect audio]", "[Rozlacz audio]"));
+    else if (idx == 2) snprintf(line, sizeof(line), "%s", tr("[Clear pairings]", "[Wyczysc parowanie]"));
     else {
       const BtDevEntry &dev = audioSnap.btDevs[idx - 3];
       snprintf(line, sizeof(line), ">%.16s %ddB", dev.name, (int)dev.rssi);
@@ -126,7 +127,7 @@ static bool wifiKey(uint8_t k) {
       strncpy(pendingWifiSsid, netSnap.aps[wifiMenuSel - 4].ssid, sizeof(pendingWifiSsid) - 1);
       pendingWifiSsid[sizeof(pendingWifiSsid) - 1] = '\0';
       char title[26];
-      snprintf(title, sizeof(title), "Haslo: %.16s", pendingWifiSsid);
+      snprintf(title, sizeof(title), "%s %.16s", tr("Pass:", "Haslo:"), pendingWifiSsid);
       modalOpenInput(MODAL_WIFI_PASS, title);
     }
   }
@@ -155,10 +156,10 @@ static void wifiDraw() {
   for (int i = 0; i < 4 && (startIdx + i) < totalItems; i++) {
     int idx = startIdx + i, y = 22 + i * 10;
     char line[28];
-    if (idx == 0)      snprintf(line, sizeof(line), "[Skanuj sieci Wi-Fi]");
-    else if (idx == 1) snprintf(line, sizeof(line), "[Polacz z zapisana]");
-    else if (idx == 2) snprintf(line, sizeof(line), "[Synchronizuj NTP]");
-    else if (idx == 3) snprintf(line, sizeof(line), "[Rozlacz Wi-Fi]");
+    if (idx == 0)      snprintf(line, sizeof(line), "%s", tr("[Scan Wi-Fi networks]", "[Skanuj sieci Wi-Fi]"));
+    else if (idx == 1) snprintf(line, sizeof(line), "%s", tr("[Connect saved Wi-Fi]", "[Polacz z zapisana]"));
+    else if (idx == 2) snprintf(line, sizeof(line), "%s", tr("[Sync NTP time]", "[Synchronizuj NTP]"));
+    else if (idx == 3) snprintf(line, sizeof(line), "%s", tr("[Disconnect Wi-Fi]", "[Rozlacz Wi-Fi]"));
     else {
       const WifiApEntry &ap = netSnap.aps[idx - 4];
       snprintf(line, sizeof(line), ">%.16s %ddB", ap.ssid, (int)ap.rssi);
@@ -180,7 +181,7 @@ static bool btKey(uint8_t k) { if (k == KEY_ESC) uiSetScreen(APP_SETTINGS_MENU);
 static void btDraw() {
   U8G2 &d = uiDisplay();
   d.clearBuffer(); rysujPasekStanu();
-  d.setFont(u8g2_font_5x7_tr); d.drawStr(4, 30, "Brak BT (Pico)");
+  d.setFont(u8g2_font_5x7_tr); d.drawStr(4, 30, "No BT (Pico)");
   uiFinishFrame();
 }
 static bool wifiTick(unsigned long) { return false; }
@@ -188,7 +189,7 @@ static bool wifiKey(uint8_t k) { if (k == KEY_ESC) uiSetScreen(APP_SETTINGS_MENU
 static void wifiDraw() {
   U8G2 &d = uiDisplay();
   d.clearBuffer(); rysujPasekStanu();
-  d.setFont(u8g2_font_5x7_tr); d.drawStr(4, 30, "Brak Wi-Fi (Pico)");
+  d.setFont(u8g2_font_5x7_tr); d.drawStr(4, 30, "No Wi-Fi (Pico)");
   uiFinishFrame();
 }
 #endif
@@ -216,12 +217,12 @@ static void contrastDraw() {
   snprintf(buf, sizeof(buf), "%d / 63", sysConfig.contrast);
   d.clearBuffer();
   rysujPasekStanu();
-  d.setFont(u8g2_font_6x10_tr); d.drawStr(24, 22, "KONTRAST LCD");
+  d.setFont(u8g2_font_6x10_tr); d.drawStr(24, 22, tr("LCD CONTRAST", "KONTRAST LCD"));
   d.drawFrame(12, 28, 104, 10);
   int fillW = (sysConfig.contrast * 100) / 63;
   if (fillW > 0) d.drawBox(14, 30, fillW, 6);
   d.drawStr(44, 50, buf);
-  d.setFont(u8g2_font_5x7_tr); d.drawStr(10, 62, "</> Zmien  Esc:Zapisz");
+  d.setFont(u8g2_font_5x7_tr); d.drawStr(10, 62, tr("</> Change  Esc:Save", "</> Zmien  Esc:Zapisz"));
   uiFinishFrame();
 }
 
@@ -251,7 +252,7 @@ static void timeDraw() {
 
   d.clearBuffer();
   rysujPasekStanu();
-  d.setFont(u8g2_font_6x10_tr); d.drawStr(26, 21, "USTAW GODZINE");
+  d.setFont(u8g2_font_6x10_tr); d.drawStr(28, 21, tr("SET SYSTEM TIME", "USTAW GODZINE"));
   d.setFont(u8g2_font_10x20_tr);
   if (editTimeField == 0) {
     d.drawBox(32, 26, 24, 20);
@@ -266,7 +267,59 @@ static void timeDraw() {
   } else {
     d.drawFrame(72, 26, 24, 20); d.drawStr(74, 43, mBuf);
   }
-  d.setFont(u8g2_font_5x7_tr); d.drawStr(6, 62, "</> Pole ^/v Zmien Esc:OK");
+  d.setFont(u8g2_font_5x7_tr); d.drawStr(6, 62, tr("</> Field ^/v Chg Esc:OK", "</> Pole ^/v Zmien Esc:OK"));
+  uiFinishFrame();
+}
+
+// --- Język / Language ---
+static void langEnter() {
+  langOptSel = (sysConfig.lang == 1) ? 1 : 0;
+}
+
+static bool langKey(uint8_t k) {
+  if (k == KEY_ESC) { uiSetScreen(APP_SETTINGS_MENU); return true; }
+  if (k == KEY_UP)        langOptSel = (langOptSel + 2) % 3;
+  else if (k == KEY_DOWN) langOptSel = (langOptSel + 1) % 3;
+  else if (k == '\n' || k == ' ') {
+    if (langOptSel < 2) {
+      sysConfig.lang = (uint8_t)langOptSel;
+      storageSaveConfig();
+      showToast(sysConfig.lang == 1 ? "Jezyk: Polski" : "Language: English");
+    } else {
+      uiSetScreen(APP_SETUP);
+    }
+  }
+  return true;
+}
+
+static void langDraw() {
+  U8G2 &d = uiDisplay();
+  d.clearBuffer();
+  rysujPasekStanu();
+  d.setFont(u8g2_font_5x7_tr);
+  d.drawStr(2, 18, tr("SYSTEM LANGUAGE", "JEZYK SYSTEMU"));
+  d.drawHLine(0, 20, 128);
+
+  const char* opts[3] = {
+    "English (Default)",
+    "Polski",
+    tr("[Run 1st Setup Wizard]", "[Uruchom 1st Setup]")
+  };
+  for (int i = 0; i < 3; i++) {
+    int y = 22 + i * 10;
+    char line[28];
+    if (i < 2 && sysConfig.lang == (uint8_t)i) snprintf(line, sizeof(line), "* %s", opts[i]);
+    else                                       snprintf(line, sizeof(line), "  %s", opts[i]);
+    if (i == langOptSel) {
+      d.drawBox(0, y, 128, 9);
+      d.setDrawColor(0); d.drawStr(2, y + 7, line); d.setDrawColor(1);
+    } else {
+      d.drawStr(2, y + 7, line);
+    }
+  }
+  d.drawHLine(0, 53, 128);
+  d.drawStr(2, 62, tr("Ent:Apply Esc:Back F1:?", "Ent:Wybierz Esc:Wstecz"));
+  rysujToastJesliAktywny();
   uiFinishFrame();
 }
 
@@ -285,7 +338,7 @@ static bool formatKey(uint8_t k) {
       } else {
         btAudioSendCmd(ACMD_SCAN_SD);
       }
-      showToast(ok ? "Sformatowano!" : "Blad formatowania");
+      showToast(ok ? tr("Formatted!", "Sformatowano!") : tr("Format failed!", "Blad formatowania"));
       modalClose();
     }
     return true;
@@ -295,7 +348,9 @@ static bool formatKey(uint8_t k) {
   if (k == KEY_UP || k == KEY_DOWN) fmtSel = 1 - fmtSel;
   else if (k == '\n' || k == ' ') {
     pendingFmtTarget = fmtSel;
-    modalOpenConfirm(MODAL_CONFIRM_FMT, (fmtSel == 0) ? "Format Flash (LittleFS)" : "Format SD (FAT32)");
+    modalOpenConfirm(MODAL_CONFIRM_FMT, (fmtSel == 0)
+                     ? tr("Format Flash (LittleFS)", "Format Flash (LittleFS)")
+                     : tr("Format SD (FAT32)", "Format SD (FAT32)"));
   }
   return true;
 }
@@ -305,10 +360,13 @@ static void formatDraw() {
   d.clearBuffer();
   rysujPasekStanu();
   d.setFont(u8g2_font_5x7_tr);
-  d.drawStr(2, 18, "FORMATOWANIE PAMIECI");
+  d.drawStr(2, 18, tr("FORMAT STORAGE", "FORMATOWANIE PAMIECI"));
   d.drawHLine(0, 20, 128);
 
-  const char* opts[2] = { "Formatuj Flash (LittleFS)", "Formatuj karte SD (FAT32)" };
+  const char* opts[2] = {
+    tr("Format Flash (LittleFS)", "Formatuj Flash (LittleFS)"),
+    tr("Format SD Card (FAT32)", "Formatuj karte SD (FAT32)")
+  };
   for (int i = 0; i < 2; i++) {
     int y = 26 + i * 12;
     if (i == fmtSel) {
@@ -318,7 +376,7 @@ static void formatDraw() {
       d.drawStr(2, y + 8, opts[i]);
     }
   }
-  d.drawStr(2, 62, "Ent:Wybierz  Esc:Powrot");
+  d.drawStr(2, 62, tr("Ent:Select  Esc:Back", "Ent:Wybierz  Esc:Powrot"));
 
   if (modalGetMode() != MODAL_NONE) rysujModal();
   rysujToastJesliAktywny();
@@ -345,7 +403,8 @@ static void aboutDraw() {
   U8G2 &d = uiDisplay();
   int freeRam = rp2040.getFreeHeap();
   char ramLine[28];
-  snprintf(ramLine, sizeof(ramLine), "Wolny RAM: %d B (%dK)", freeRam, freeRam / 1024);
+  snprintf(ramLine, sizeof(ramLine), "%s %d B (%dK)",
+           tr("Free RAM:", "Wolny RAM:"), freeRam, freeRam / 1024);
 
   d.clearBuffer();
   rysujPasekStanu();
@@ -363,49 +422,35 @@ static void aboutDraw() {
   d.drawStr(4, 41, "PWM Jack | SD | LittleFS");
 #endif
   d.drawStr(4, 50, ramLine);
-  d.drawStr(14, 62, "Esc:Powrot  F1:Skroty");
+  d.drawStr(14, 62, tr("Esc:Back  F1:Shortcuts", "Esc:Powrot  F1:Skroty"));
   uiFinishFrame();
 }
 
-static const char* const HELP_SET_BT[] = {
-  "^ / v: Wybor pozycji",
-  "Ent/Spc: Skanuj / Polacz",
-  "Esc: Menu ustawien",
-  "F1: Skroty klawiszowe"
-};
-static const char* const HELP_SET_WIFI[] = {
-  "^ / v: Wybor sieci/akcji",
-  "Ent/Spc: Skan / NTP / OK",
-  "Esc: Menu ustawien",
-  "F1: Skroty klawiszowe"
-};
-static const char* const HELP_SET_CONTRAST[] = {
-  "</v: Zmniejsz kontrast",
-  ">/ ^: Zwieksz kontrast",
-  "Ent/Esc: Zapisz i wroc",
-  "F1: Skroty klawiszowe"
-};
-static const char* const HELP_SET_TIME[] = {
-  "</>: Wybierz Godz / Min",
-  "^ / v: Zmien wartosc",
-  "Ent/Esc: Zatwierdz",
-  "F1: Skroty klawiszowe"
-};
-static const char* const HELP_SET_FORMAT[] = {
-  "^ / v: Wybierz Flash / SD",
-  "Ent/Spc: Formatuj (potw.)",
-  "Esc: Menu ustawien",
-  "F1: Skroty klawiszowe"
-};
-static const char* const HELP_SET_ABOUT[] = {
-  "Auto-odswiezanie RAM: 1s",
-  "Esc: Menu ustawien",
-  "F1: Skroty klawiszowe"
-};
+static const char* const HELP_SET_BT_EN[] = { "^/v: Select", "Ent/Spc: Scan/Connect", "Esc: Settings menu", "F1: Shortcuts" };
+static const char* const HELP_SET_BT_PL[] = { "^/v: Wybor pozycji", "Ent/Spc: Skanuj/Polacz", "Esc: Menu ustawien", "F1: Skroty" };
 
-const AppScreen screenSetBt       = { nullptr,    btTick,    btKey,       btDraw,       HELP_SET_BT,       4 };
-const AppScreen screenSetWifi     = { nullptr,    wifiTick,  wifiKey,     wifiDraw,     HELP_SET_WIFI,     4 };
-const AppScreen screenSetContrast = { nullptr,    nullptr,   contrastKey, contrastDraw, HELP_SET_CONTRAST, 4 };
-const AppScreen screenSetTime     = { timeEnter,  nullptr,   timeKey,     timeDraw,     HELP_SET_TIME,     4 };
-const AppScreen screenSetFormat   = { nullptr,    nullptr,   formatKey,   formatDraw,   HELP_SET_FORMAT,   4 };
-const AppScreen screenSetAbout    = { aboutEnter, aboutTick, aboutKey,    aboutDraw,    HELP_SET_ABOUT,    3 };
+static const char* const HELP_SET_WIFI_EN[] = { "^/v: Select AP/Action", "Ent/Spc: Scan/NTP/OK", "Esc: Settings menu", "F1: Shortcuts" };
+static const char* const HELP_SET_WIFI_PL[] = { "^/v: Wybor sieci/akcji", "Ent/Spc: Skan/NTP/OK", "Esc: Menu ustawien", "F1: Skroty" };
+
+static const char* const HELP_SET_CONTRAST_EN[] = { "</v: Decrease contrast", ">/^: Increase contrast", "Ent/Esc: Save & back", "F1: Shortcuts" };
+static const char* const HELP_SET_CONTRAST_PL[] = { "</v: Zmniejsz kontrast", ">/^: Zwieksz kontrast", "Ent/Esc: Zapisz i wroc", "F1: Skroty" };
+
+static const char* const HELP_SET_TIME_EN[] = { "</>: Select Hour/Min", "^/v: Change value", "Ent/Esc: Confirm", "F1: Shortcuts" };
+static const char* const HELP_SET_TIME_PL[] = { "</>: Wybierz Godz/Min", "^/v: Zmien wartosc", "Ent/Esc: Zatwierdz", "F1: Skroty" };
+
+static const char* const HELP_SET_LANG_EN[] = { "^/v: Choose language", "Ent/Spc: Apply/Setup", "Esc: Settings menu", "F1: Shortcuts" };
+static const char* const HELP_SET_LANG_PL[] = { "^/v: Wybierz jezyk", "Ent/Spc: Zastosuj", "Esc: Menu ustawien", "F1: Skroty" };
+
+static const char* const HELP_SET_FORMAT_EN[] = { "^/v: Flash / SD", "Ent/Spc: Format (confirm)", "Esc: Settings menu", "F1: Shortcuts" };
+static const char* const HELP_SET_FORMAT_PL[] = { "^/v: Flash / SD", "Ent/Spc: Formatuj (potw.)", "Esc: Menu ustawien", "F1: Skroty" };
+
+static const char* const HELP_SET_ABOUT_EN[] = { "Auto-refresh RAM: 1s", "Esc: Settings menu", "F1: Shortcuts" };
+static const char* const HELP_SET_ABOUT_PL[] = { "Auto-odswiezanie RAM: 1s", "Esc: Menu ustawien", "F1: Skroty" };
+
+const AppScreen screenSetBt       = { nullptr,    btTick,    btKey,       btDraw,       HELP_SET_BT_EN,       HELP_SET_BT_PL,       4 };
+const AppScreen screenSetWifi     = { nullptr,    wifiTick,  wifiKey,     wifiDraw,     HELP_SET_WIFI_EN,     HELP_SET_WIFI_PL,     4 };
+const AppScreen screenSetContrast = { nullptr,    nullptr,   contrastKey, contrastDraw, HELP_SET_CONTRAST_EN, HELP_SET_CONTRAST_PL, 4 };
+const AppScreen screenSetTime     = { timeEnter,  nullptr,   timeKey,     timeDraw,     HELP_SET_TIME_EN,     HELP_SET_TIME_PL,     4 };
+const AppScreen screenSetLang     = { langEnter,  nullptr,   langKey,     langDraw,     HELP_SET_LANG_EN,     HELP_SET_LANG_PL,     4 };
+const AppScreen screenSetFormat   = { nullptr,    nullptr,   formatKey,   formatDraw,   HELP_SET_FORMAT_EN,   HELP_SET_FORMAT_PL,   4 };
+const AppScreen screenSetAbout    = { aboutEnter, aboutTick, aboutKey,    aboutDraw,    HELP_SET_ABOUT_EN,    HELP_SET_ABOUT_PL,    3 };

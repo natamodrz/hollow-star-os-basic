@@ -11,6 +11,7 @@
 
 enum AppState : uint8_t {
   APP_MENU,
+  APP_SETUP,
   APP_TEMP,
   APP_CALC,
   APP_NOTES,
@@ -21,15 +22,16 @@ enum AppState : uint8_t {
   APP_TOOLS_MENU,
   APP_FTP,
   APP_SUSPEND,
-  // Gry
+  // Gry / Games
   APP_BRICK,
   APP_TETRIS,
   APP_RACING,
-  // Ustawienia
+  // Ustawienia / Settings
   APP_SET_BT,
   APP_SET_WIFI,
   APP_SET_CONTRAST,
   APP_SET_TIME,
+  APP_SET_LANG,
   APP_SET_FORMAT,
   APP_SET_ABOUT,
   APP_STATE_COUNT
@@ -50,6 +52,7 @@ struct AppScreen {
   bool (*onTick)(unsigned long now);
   bool (*onKey)(uint8_t k);
   void (*onDraw)();
-  const char* const* helpLines;
+  const char* const* helpLinesEn;
+  const char* const* helpLinesPl;
   uint8_t helpCount;
 };

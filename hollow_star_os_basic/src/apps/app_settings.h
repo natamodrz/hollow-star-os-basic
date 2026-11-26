@@ -5,5 +5,6 @@ extern const AppScreen screenSetBt;
 extern const AppScreen screenSetWifi;
 extern const AppScreen screenSetContrast;
 extern const AppScreen screenSetTime;
+extern const AppScreen screenSetLang;
 extern const AppScreen screenSetFormat;
 extern const AppScreen screenSetAbout;

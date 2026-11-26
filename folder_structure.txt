@@ -1,34 +1,38 @@
-hollow-star-os-basic/                # Główny folder repozytorium (otwierasz go w Antigravity)
-├── AGENTS.md                        # Stały kontekst projektu dla Google Antigravity
-├── LICENSE                          # Licencja GNU General Public License v3.0
-├── README.md                        # Dokumentacja projektu po angielsku (GitHub)
-├── .gitignore                       # Ignoruje pliki tymczasowe kompilacji (zachowuje releases/*.uf2)
-├── pico.sh                          # Skrypt: build [picow|pico|all] / release / upload / flash / monitor / logs
+hollow-star-os-basic/                # Repository root
+├── AGENTS.md                        # Permanent project context for Google Antigravity
+├── LICENSE                          # GNU General Public License v3.0
+├── README.md                        # English GitHub README with demo gallery & vibe-coded warning
+├── .gitignore                       # Ignores build/, *.uf2, first-prompt.txt, macOS metadata
+├── pico.sh                          # CLI helper: build [picow|pico|all] / release / upload / flash / logs
 ├── docs/
-│   └── wiring.md                    # Schemat podłączenia pinów (ST7565, SD, USB 2.4 GHz, Audio Jack PWM)
-├── releases/                        # Gotowe flashowalne obrazy .uf2 dla każdej wersji (Pico i Pico W)
-│   ├── hollow-star-os-pico-v1.1.0.uf2
-│   └── hollow-star-os-picow-v1.1.0.uf2
-└── hollow_star_os_basic/            # Folder szkicu Arduino (otwierany też przez Arduino IDE)
-    ├── hollow_star_os_basic.ino     # Wątek UI (Core 0), routing ekranów, F1 pomoc, suspend, Core 1 USB loop
-    ├── usb_kbd.h / .cpp             # Klawiatura USB Host na PIO (Core 1, izolacja TinyUSB)
-    ├── storage_cfg.h / .cpp         # LittleFS, karta SD (SPI1/SDFS), /config.cfg, wolne miejsce, formatowanie
-    ├── bt_audio.h / .cpp            # Wątek Audio (A2DP + PWMAudio Jack + detekcja GP8 + libhelix + głośność)
-    ├── net_ftp.h / .cpp             # Wątek sieciowy Pico W (Wi-Fi + RSSI, NTP, FTP z logowaniem)
-    └── src/                         # Moduły UI, aplikacji i gier
+│   ├── wiring.md                    # Pinout & RC audio jack wiring schematics
+│   └── demo/                        # Hardware & UI demonstration screenshots for README.md
+│       ├── demo-setup.jpg
+│       ├── demo-about.jpg
+│       ├── demo-brick-breaker.jpg
+│       ├── demo-tetris.jpg
+│       └── demo-racing.jpg
+└── hollow_star_os_basic/            # Arduino sketch directory
+    ├── hollow_star_os_basic.ino     # Core 0 UI loop, screen router, F1 help, suspend, Core 1 USB loop
+    ├── usb_kbd.h / .cpp             # USB Host keyboard on PIO (Core 1, TinyUSB isolated)
+    ├── storage_cfg.h / .cpp         # LittleFS, SD (SPI1/SDFS), /config.cfg (lang/setup/FTP/vol), disk info
+    ├── bt_audio.h / .cpp            # Audio/BT task (A2DP + PWMAudio Jack + GP8 detect + libhelix + volume)
+    ├── net_ftp.h / .cpp             # Pico W network task (Wi-Fi + RSSI, NTP, authenticated FTP server)
+    └── src/                         # UI, apps, and games modules
         ├── os/
-        │   ├── app_types.h          # Stany AppState, detekcja Pico/Pico W (HSOS_HAS_WIRELESS), modale, AppScreen
-        │   ├── ui_common.h / .cpp   # Wspólny scratch RAM, pasek stanu (Wi-Fi/BT/Jack), branding, modale, pomoc F1
-        │   └── ui_menus.h / .cpp    # Menu główne i podmenu (ukrywa BT/Wi-Fi/NTP/FTP na zwykłym Pico)
+        │   ├── app_types.h          # AppState, board detection (HSOS_HAS_WIRELESS), modals, AppScreen
+        │   ├── ui_common.h / .cpp   # Shared RAM union, tr() i18n helper, status bar, modals, F1 overlay
+        │   └── ui_menus.h / .cpp    # Bilingual menus (hides BT/Wi-Fi/NTP/FTP on standard Pico)
         ├── apps/
-        │   ├── app_temp.h / .cpp    # Sys Info: temp. RP2040, zajęty RAM, wolne miejsce Flash i SD
-        │   ├── app_calc.h / .cpp    # Kalkulator (ułamki, pierwiastki, potęgi, dłuższe wyrażenia)
-        │   ├── app_notes.h / .cpp   # Kreator lokalizacji/nazwy + edytor/podgląd Markdown (.md)
-        │   ├── app_files.h / .cpp   # Eksplorator plików (Flash / SD)
-        │   ├── app_music.h / .cpp   # Odtwarzacz MP3 (Bluetooth A2DP / Headphone Jack PWM + głośność + equalizer)
-        │   ├── app_ftp.h / .cpp     # Interfejs serwera FTP (dysk Flash/SD + konfiguracja loginu i hasła)
-        │   └── app_settings.h / .cpp# Ustawienia (BT, Wi-Fi/NTP dla Pico W; Kontrast, Czas, Formatowanie, About)
+        │   ├── app_setup.h / .cpp   # 1st-Time Setup Wizard (Language -> Wi-Fi -> Time -> Welcome)
+        │   ├── app_temp.h / .cpp    # Sys Info: RP2040 temp, used RAM, Flash & SD free space
+        │   ├── app_calc.h / .cpp    # Expression calculator (fractions, roots, powers, parentheses)
+        │   ├── app_notes.h / .cpp   # Location/filename creator + Markdown (.md) editor & preview
+        │   ├── app_files.h / .cpp   # Dual-drive File Explorer (Flash / SD)
+        │   ├── app_music.h / .cpp   # MP3 player (BT A2DP / PWM Jack, volume, equalizer, progress)
+        │   ├── app_ftp.h / .cpp     # FTP server UI (drive switch + username/password settings)
+        │   └── app_settings.h / .cpp# BT, Wi-Fi/NTP, Contrast, Time, Language, Format, About
         └── games/
             ├── game_brick.h / .cpp  # Brick Breaker
             ├── game_tetris.h / .cpp # Tetris
-            └── game_racing.h / .cpp # Wyścigi (Brick Game)
+            └── game_racing.h / .cpp # Brick Game Racing

@@ -155,16 +155,16 @@ void appNotesOpenFile(bool onSD, const char* path, AppState returnApp, bool star
 static void launchEmptyNoteFromSetup() {
   if (setupFileName[0] == '\0') {
     setupSel = 2;
-    showToast("Podaj nazwe pliku!");
+    showToast(tr("Enter filename!", "Podaj nazwe pliku!"));
     return;
   }
   if (setupOnSD && !sdMounted && !storageMountSD()) {
-    showToast("Brak karty SD!");
+    showToast(tr("No SD card!", "Brak karty SD!"));
     return;
   }
   buildSetupTargetPath(notePath, sizeof(notePath));
   noteOnSD = setupOnSD;
-  appScratch.notes.buf[0] = '\0'; // Pusty plik .md gotowy do edycji
+  appScratch.notes.buf[0] = '\0';
   noteScroll = 0;
   noteMode = NOTE_EDIT;
 }
@@ -172,13 +172,13 @@ static void launchEmptyNoteFromSetup() {
 static void launchExistingNoteFromSetup() {
   if (setupFileName[0] == '\0') {
     setupSel = 2;
-    showToast("Podaj nazwe pliku!");
+    showToast(tr("Enter filename!", "Podaj nazwe pliku!"));
     return;
   }
   char full[128];
   buildSetupTargetPath(full, sizeof(full));
   if (!storageExists(setupOnSD, full)) {
-    showToast("Plik nie istnieje!");
+    showToast(tr("File not found!", "Plik nie istnieje!"));
     return;
   }
   noteOnSD = setupOnSD;
@@ -221,7 +221,7 @@ static bool setupKey(uint8_t k) {
     bool ok = storageMountSD();
     setupDirIdx = 0;
     loadSetupDirs();
-    showToast(ok ? "SD odswiezona!" : "Brak karty SD!");
+    showToast(ok ? tr("SD mounted!", "SD odswiezona!") : tr("No SD card!", "Brak karty SD!"));
     return true;
   }
   if (k == KEY_F3) {
@@ -282,7 +282,7 @@ static bool notesKey(uint8_t k) {
   }
   if (k == KEY_F3 || k == KEY_CTRL_S) {
     bool ok = storageWriteText(noteOnSD, notePath, appScratch.notes.buf);
-    showToast(ok ? "Zapisano plik!" : "Blad zapisu!");
+    showToast(ok ? tr("File saved!", "Zapisano plik!") : tr("Save error!", "Blad zapisu!"));
     return true;
   }
   if (k == KEY_F2 || k == KEY_TAB) {
@@ -316,14 +316,14 @@ static bool notesKey(uint8_t k) {
 static void drawSetup() {
   U8G2 &d = uiDisplay();
   d.setFont(u8g2_font_5x7_tr);
-  d.drawStr(2, 17, "NOWY PLIK .MD (WYBOR)");
+  d.drawStr(2, 17, tr("NEW .MD FILE (SETUP)", "NOWY PLIK .MD (WYBOR)"));
   d.drawHLine(0, 19, 128);
 
   char line[28];
 
   // Wiersz 0: Dysk
-  if (setupOnSD) snprintf(line, sizeof(line), "Dysk  : <SD %s>", sdMounted ? "OK" : "BRAK");
-  else           snprintf(line, sizeof(line), "Dysk  : <Flash LittleFS>");
+  if (setupOnSD) snprintf(line, sizeof(line), "%s <SD %s>", tr("Drive :", "Dysk  :"), sdMounted ? "OK" : tr("NONE", "BRAK"));
+  else           snprintf(line, sizeof(line), "%s <Flash LittleFS>", tr("Drive :", "Dysk  :"));
   if (setupSel == 0) {
     d.drawBox(0, 21, 128, 8);
     d.setDrawColor(0); d.drawStr(2, 28, line); d.setDrawColor(1);
@@ -342,10 +342,10 @@ static void drawSetup() {
 
   // Wiersz 2: Nazwa
   if (setupFileName[0]) {
-    snprintf(line, sizeof(line), "Nazwa : %.13s%s_",
+    snprintf(line, sizeof(line), "%s %.13s%s_", tr("Name  :", "Nazwa :"),
              setupFileName, hasMdOrTxtExt(setupFileName) ? "" : ".md");
   } else {
-    snprintf(line, sizeof(line), "Nazwa : _ (wpisz)");
+    snprintf(line, sizeof(line), "%s _ %s", tr("Name  :", "Nazwa :"), tr("(type)", "(wpisz)"));
   }
   if (setupSel == 2) {
     d.drawBox(0, 37, 128, 8);
@@ -355,16 +355,16 @@ static void drawSetup() {
   }
 
   // Wiersz 3: Przycisk startu
-  const char* btn = "[ Edytuj pusty plik ]";
+  const char* btn = tr("[ Edit empty .md file ]", "[ Edytuj pusty plik ]");
   if (setupSel == 3) {
     d.drawBox(0, 45, 128, 8);
-    d.setDrawColor(0); d.drawStr(10, 52, btn); d.setDrawColor(1);
+    d.setDrawColor(0); d.drawStr(6, 52, btn); d.setDrawColor(1);
   } else {
-    d.drawStr(10, 52, btn);
+    d.drawStr(6, 52, btn);
   }
 
   d.drawHLine(0, 54, 128);
-  d.drawStr(2, 62, "Ent:Nowy F3:Otw F2:SD F1");
+  d.drawStr(2, 62, tr("Ent:New F3:Open F2:SD F1", "Ent:Nowy F3:Otw F2:SD F1"));
 }
 
 static void notesDraw() {
@@ -406,7 +406,7 @@ static void notesDraw() {
       y += 10;
     }
     d.drawHLine(0, 53, 128);
-    d.drawStr(2, 62, "MD:Podg Tab:Edyt F1:Pom");
+    d.drawStr(2, 62, tr("MD:View Tab:Edit F1:Hlp", "MD:Podg Tab:Edyt F1:Pom"));
   } else {
     char lines[4][26];
     int total = 0;
@@ -442,14 +442,23 @@ static void notesDraw() {
       y += 10;
     }
     d.drawHLine(0, 53, 128);
-    d.drawStr(2, 62, "^S/F3:Zap Tab:MD F1:Pom");
+    d.drawStr(2, 62, tr("^S/F3:Sav Tab:MD F1:Hlp", "^S/F3:Zap Tab:MD F1:Pom"));
   }
 
   rysujToastJesliAktywny();
   uiFinishFrame();
 }
 
-static const char* const HELP_NOTES[] = {
+static const char* const HELP_NOTES_EN[] = {
+  "Setup: ^/v field </> drv",
+  "Setup: Ent=empty F3=open",
+  "Setup: F2=mount SD",
+  "Edit: Ctrl+S/F3 Save",
+  "Edit: Tab/F2 MD Preview",
+  "Edit: Del=clear note",
+  "Esc: Back / Menu"
+};
+static const char* const HELP_NOTES_PL[] = {
   "Wybor: ^/v pola </> dysk",
   "Wybor: Ent=pusty F3=otw.",
   "Wybor: F2=montuj SD",
@@ -459,4 +468,4 @@ static const char* const HELP_NOTES[] = {
   "Esc: Wstecz / Menu"
 };
 
-const AppScreen screenAppNotes = { nullptr, nullptr, notesKey, notesDraw, HELP_NOTES, 7 };
+const AppScreen screenAppNotes = { nullptr, nullptr, notesKey, notesDraw, HELP_NOTES_EN, HELP_NOTES_PL, 7 };

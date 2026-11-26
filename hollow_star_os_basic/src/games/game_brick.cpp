@@ -117,7 +117,8 @@ static void brickDraw() {
   d.clearBuffer();
   rysujPasekStanu();
   d.setFont(u8g2_font_5x7_tr);
-  snprintf(buf, sizeof(buf), "P:%d  L%d  Z:%d", bbPunkty, bbPoziom, bbZycia);
+  snprintf(buf, sizeof(buf), "%s:%d  L%d  %s:%d",
+           tr("S", "P"), bbPunkty, bbPoziom, tr("H", "Z"), bbZycia);
   d.drawStr(2, 16, buf);
 
   for (int r = 0; r < BB_ROWS; r++) {
@@ -131,12 +132,19 @@ static void brickDraw() {
   }
   d.drawBox((int)bbPx, BB_PY, BB_PW, BB_PH);
   d.drawBox((int)bbBx, (int)bbBy, BB_BS, BB_BS);
-  if (bbCzeka && !bbKoniec) d.drawStr(14, 50, "[Spacja] Start </>");
-  if (bbKoniec) rysujPopupKoniecGry("KONIEC GRY!");
+  if (bbCzeka && !bbKoniec) d.drawStr(14, 50, tr("[Space] Start </>", "[Spacja] Start </>"));
+  if (bbKoniec) rysujPopupKoniecGry(tr("GAME OVER!", "KONIEC GRY!"));
   uiFinishFrame();
 }
 
-static const char* const HELP_BRICK[] = {
+static const char* const HELP_BRICK_EN[] = {
+  "</> (hold): Move paddle",
+  "Spc/Ent/^: Launch ball",
+  "Ent/Spc: Restart (over)",
+  "Esc: Games menu",
+  "F1: Pause & shortcuts"
+};
+static const char* const HELP_BRICK_PL[] = {
   "</> (trzymaj): Paletka",
   "Spc/Ent/^: Wypusc pilke",
   "Ent/Spc: Nowa gra (koniec)",
@@ -144,4 +152,4 @@ static const char* const HELP_BRICK[] = {
   "F1: Pauza i skroty"
 };
 
-const AppScreen screenGameBrick = { brickEnter, brickTick, brickKey, brickDraw, HELP_BRICK, 5 };
+const AppScreen screenGameBrick = { brickEnter, brickTick, brickKey, brickDraw, HELP_BRICK_EN, HELP_BRICK_PL, 5 };

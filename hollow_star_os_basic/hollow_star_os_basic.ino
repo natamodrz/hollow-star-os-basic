@@ -10,6 +10,7 @@
 #include "src/os/app_types.h"
 #include "src/os/ui_common.h"
 #include "src/os/ui_menus.h"
+#include "src/apps/app_setup.h"
 #include "src/apps/app_temp.h"
 #include "src/apps/app_calc.h"
 #include "src/apps/app_notes.h"
@@ -30,6 +31,7 @@ U8G2_ST7565_ERC12864_ALT_F_4W_SW_SPI u8g2(U8G2_R0, 18, 19, 17, 16, 20);
 // Tabela ekranów indeksowana przez AppState
 static const AppScreen* const SCREENS[APP_STATE_COUNT] = {
   &screenMainMenu,     // APP_MENU
+  &screenAppSetup,     // APP_SETUP
   &screenAppTemp,      // APP_TEMP
   &screenAppCalc,      // APP_CALC
   &screenAppNotes,     // APP_NOTES
@@ -47,6 +49,7 @@ static const AppScreen* const SCREENS[APP_STATE_COUNT] = {
   &screenSetWifi,      // APP_SET_WIFI
   &screenSetContrast,  // APP_SET_CONTRAST
   &screenSetTime,      // APP_SET_TIME
+  &screenSetLang,      // APP_SET_LANG
   &screenSetFormat,    // APP_SET_FORMAT
   &screenSetAbout      // APP_SET_ABOUT
 };
@@ -74,13 +77,13 @@ void osEnterSuspend() {
   u8g2.clearBuffer();
   u8g2.drawFrame(2, 2, 124, 60);
   u8g2.setFont(u8g2_font_6x10_tr);
-  u8g2.drawStr(28, 28, "USPIENIE...");
+  u8g2.drawStr(28, 28, tr("SUSPENDED...", "USPIENIE..."));
   u8g2.setFont(u8g2_font_5x7_tr);
-  u8g2.drawStr(8, 44, "Dowolny klawisz wybudza");
+  u8g2.drawStr(8, 44, tr("Any key wakes display", "Dowolny klawisz wybudza"));
   u8g2.sendBuffer();
 
   vTaskDelay(pdMS_TO_TICKS(600));
-  u8g2.setPowerSave(1); // Sprzętowe uśpienie sterownika ST7565
+  u8g2.setPowerSave(1);
 
   uint8_t dummy;
   while (xQueueReceive(keyQueue, &dummy, 0) == pdTRUE) {}
@@ -101,7 +104,7 @@ void setup() {
   uiAttachDisplay(&u8g2);
   u8g2.begin();
   u8g2.setContrast(sysConfig.contrast * 4);
-  rysujBootSplash("Uruchamianie uslug...");
+  rysujBootSplash(tr("Starting services...", "Uruchamianie uslug..."));
 
   btAudioStartTask();
   netFtpStartTask();
@@ -110,7 +113,7 @@ void setup() {
 
   btAudioGetSnapshot(audioSnap);
   netFtpGetSnapshot(netSnap);
-  uiSetScreen(APP_MENU);
+  uiSetScreen(sysConfig.setupDone ? APP_MENU : APP_SETUP);
   przerysujAktywny();
 }
 
@@ -154,10 +157,12 @@ void loop() {
       continue;
     }
     if (k == KEY_F1 && modalGetMode() == MODAL_NONE &&
-        ekran < APP_STATE_COUNT && SCREENS[ekran] &&
-        SCREENS[ekran]->helpLines && SCREENS[ekran]->helpCount > 0) {
-      uiHelpOpen(SCREENS[ekran]->helpLines, SCREENS[ekran]->helpCount);
-      continue;
+        ekran < APP_STATE_COUNT && SCREENS[ekran] && SCREENS[ekran]->helpCount > 0) {
+      const char* const* hl = (sysConfig.lang == 1) ? SCREENS[ekran]->helpLinesPl : SCREENS[ekran]->helpLinesEn;
+      if (hl) {
+        uiHelpOpen(hl, SCREENS[ekran]->helpCount);
+        continue;
+      }
     }
     if (ekran < APP_STATE_COUNT && SCREENS[ekran] && SCREENS[ekran]->onKey) {
       SCREENS[ekran]->onKey(k);

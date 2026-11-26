@@ -153,19 +153,26 @@ static void tetrisDraw() {
       if (tKsztalt[r][c] && tY + r >= 0) d.drawBox(T_BX + (tX + c) * 4, T_BY + (tY + r) * 4, 3, 3);
 
   d.setFont(u8g2_font_5x7_tr);
-  snprintf(buf, sizeof(buf), "PKT:%d", tPunkty); d.drawStr(52, 18, buf);
-  snprintf(buf, sizeof(buf), "LIN:%d", tLinie);  d.drawStr(52, 27, buf);
-  d.drawStr(52, 37, "NAST:");
+  snprintf(buf, sizeof(buf), "%s:%d", tr("PTS", "PKT"), tPunkty); d.drawStr(52, 18, buf);
+  snprintf(buf, sizeof(buf), "LIN:%d", tLinie);                      d.drawStr(52, 27, buf);
+  d.drawStr(52, 37, tr("NEXT:", "NAST:"));
   for (int r = 0; r < tNH; r++)
     for (int c = 0; c < tNW; c++)
       if (tNast[r][c]) d.drawBox(84 + c * 4, 31 + r * 4, 3, 3);
-  d.drawStr(52, 53, "</> ^Obr");
-  d.drawStr(52, 62, "vDol Spc:Z");
-  if (tKoniec) rysujPopupKoniecGry("KONIEC GRY!");
+  d.drawStr(52, 53, tr("</> ^Rot", "</> ^Obr"));
+  d.drawStr(52, 62, tr("vDn Spc:Dr", "vDol Spc:Z"));
+  if (tKoniec) rysujPopupKoniecGry(tr("GAME OVER!", "KONIEC GRY!"));
   uiFinishFrame();
 }
 
-static const char* const HELP_TETRIS[] = {
+static const char* const HELP_TETRIS_EN[] = {
+  "</>: Move piece",
+  "^: Rotate piece",
+  "v: Soft drop",
+  "Spc/Ent: Hard drop",
+  "Esc: Games menu | F1: Help"
+};
+static const char* const HELP_TETRIS_PL[] = {
   "</>: Przesun klocek",
   "^: Obroc klocek",
   "v: Przyspiesz opadanie",
@@ -173,4 +180,4 @@ static const char* const HELP_TETRIS[] = {
   "Esc: Menu gier | F1: Pom."
 };
 
-const AppScreen screenGameTetris = { tetrisEnter, tetrisTick, tetrisKey, tetrisDraw, HELP_TETRIS, 5 };
+const AppScreen screenGameTetris = { tetrisEnter, tetrisTick, tetrisKey, tetrisDraw, HELP_TETRIS_EN, HELP_TETRIS_PL, 5 };

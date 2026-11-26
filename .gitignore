@@ -2,17 +2,18 @@
 .DS_Store
 ._*
 
+# Local notes / prompts
+first-prompt.txt
+
 # Arduino / build artifacts
 build/
 *.bin
 *.elf
 *.hex
 *.uf2
-!releases/*.uf2
 *.map
 *.dis
 
 # Edytory i narzędzia lokalne
 .vscode/
 *.log
-

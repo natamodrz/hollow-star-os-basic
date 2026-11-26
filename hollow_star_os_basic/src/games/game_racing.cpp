@@ -161,17 +161,24 @@ static void racingDraw() {
   racingDrawCar(rPlayerLane, 9);
 
   d.setFont(u8g2_font_5x7_tr);
-  d.drawStr(56, 18, "WYSCIGI");
-  snprintf(buf, sizeof(buf), "PKT:%d", rScore);     d.drawStr(56, 28, buf);
-  snprintf(buf, sizeof(buf), "REK:%d", rHighScore); d.drawStr(56, 37, buf);
-  snprintf(buf, sizeof(buf), "SPD:%d", rSpeed);     d.drawStr(56, 46, buf);
-  d.drawStr(56, 55, "</> Pas");
+  d.drawStr(56, 18, tr("RACING", "WYSCIGI"));
+  snprintf(buf, sizeof(buf), "%s:%d", tr("PTS", "PKT"), rScore);     d.drawStr(56, 28, buf);
+  snprintf(buf, sizeof(buf), "%s:%d", tr("HI",  "REK"), rHighScore); d.drawStr(56, 37, buf);
+  snprintf(buf, sizeof(buf), "SPD:%d", rSpeed);                      d.drawStr(56, 46, buf);
+  d.drawStr(56, 55, tr("</> Lane", "</> Pas"));
   d.drawStr(56, 63, "^ Turbo");
-  if (rGameOver) rysujPopupKoniecGry("WYPADEK!");
+  if (rGameOver) rysujPopupKoniecGry(tr("CRASH!", "WYPADEK!"));
   uiFinishFrame();
 }
 
-static const char* const HELP_RACING[] = {
+static const char* const HELP_RACING_EN[] = {
+  "</>: Change lane",
+  "^ (hold): Turbo speed",
+  "Ent/Spc: Restart (over)",
+  "Esc: Games menu",
+  "F1: Pause & shortcuts"
+};
+static const char* const HELP_RACING_PL[] = {
   "</>: Zmiana pasa",
   "^ (trzymaj): Turbo",
   "Ent/Spc: Nowa gra (koniec)",
@@ -179,4 +186,4 @@ static const char* const HELP_RACING[] = {
   "F1: Pauza i skroty"
 };
 
-const AppScreen screenGameRacing = { racingEnter, racingTickCheck, racingKey, racingDraw, HELP_RACING, 5 };
+const AppScreen screenGameRacing = { racingEnter, racingTickCheck, racingKey, racingDraw, HELP_RACING_EN, HELP_RACING_PL, 5 };

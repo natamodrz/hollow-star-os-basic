@@ -155,10 +155,10 @@ void rysujModal() {
     const char* start = (len > 20) ? (modalInput + len - 20) : modalInput;
     snprintf(vis, sizeof(vis), "%s_", start);
     d.drawStr(10, 38, vis);
-    d.drawStr(8, 50, "Ent:OK  Esc:Anuluj");
+    d.drawStr(8, 50, tr("Ent:OK  Esc:Cancel", "Ent:OK  Esc:Anuluj"));
   } else {
-    d.drawStr(8, 38, "Czy na pewno?");
-    d.drawStr(8, 50, "[Y] Tak   [Esc] Nie");
+    d.drawStr(8, 38, tr("Are you sure?", "Czy na pewno?"));
+    d.drawStr(8, 50, tr("[Y] Yes   [Esc] No", "[Y] Tak   [Esc] Nie"));
   }
 }
 
@@ -195,7 +195,7 @@ void rysujBootSplash(const char* statusLine) {
   d.drawStr(38, 41, HSOS_BOARD_TAG " SMP");
 
   d.drawHLine(6, 45, 116);
-  d.drawStr(8, 56, statusLine ? statusLine : "Inicjalizacja...");
+  d.drawStr(8, 56, statusLine ? statusLine : tr("Initializing...", "Inicjalizacja..."));
   d.sendBuffer();
 }
 
@@ -291,7 +291,7 @@ void rysujPopupKoniecGry(const char* title) {
   d.drawFrame(14, 22, 100, 28);
   d.setFont(u8g2_font_5x7_tr);
   d.drawStr(36, 34, title);
-  d.drawStr(18, 45, "Ent:Gra Esc:Menu");
+  d.drawStr(18, 45, tr("Ent:Retry Esc:Menu", "Ent:Gra Esc:Menu"));
 }
 
 bool uiHelpIsOpen() { return helpOpen; }
@@ -330,11 +330,12 @@ static void rysujHelpOverlay() {
   d.setFont(u8g2_font_5x7_tr);
 
   char hdr[24];
+  const char* baseTitle = tr("SHORTCUTS [F1]", "SKROTY [F1]");
   if (helpLinesCount > 4) {
     int maxScroll = helpLinesCount - 4;
-    snprintf(hdr, sizeof(hdr), "SKROTY [F1] %d/%d", (int)helpScroll + 1, maxScroll + 1);
+    snprintf(hdr, sizeof(hdr), "%s %d/%d", baseTitle, (int)helpScroll + 1, maxScroll + 1);
   } else {
-    snprintf(hdr, sizeof(hdr), "SKROTY [F1]");
+    snprintf(hdr, sizeof(hdr), "%s", baseTitle);
   }
   d.drawStr(5, 19, hdr);
   d.drawHLine(4, 21, 120);
@@ -344,7 +345,9 @@ static void rysujHelpOverlay() {
   }
 
   d.drawHLine(4, 54, 120);
-  d.drawStr(5, 61, (helpLinesCount > 4) ? "^/v:Przewin  Esc/F1:OK" : "Esc / F1 / Ent: Zamknij");
+  d.drawStr(5, 61, (helpLinesCount > 4)
+                   ? tr("^/v:Scroll  Esc/F1:OK", "^/v:Przewin  Esc/F1:OK")
+                   : tr("Esc / F1 / Ent: Close", "Esc / F1 / Ent: Zamknij"));
 }
 
 void uiFinishFrame() {

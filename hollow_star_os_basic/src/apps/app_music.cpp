@@ -4,7 +4,7 @@
 #include "../../storage_cfg.h"
 #include "../../bt_audio.h"
 
-static int  trackSel = 0;
+static int trackSel = 0;
 static bool playerView = false;
 static unsigned long lastAnimMs = 0;
 static uint8_t animFrame = 0;
@@ -51,7 +51,7 @@ static bool musicKey(uint8_t k) {
   }
   if (k == 'r' || k == 'R') {
     btAudioSendCmd(ACMD_SCAN_SD);
-    showToast("Skanuje karte SD...");
+    showToast(tr("Scanning SD card...", "Skanuje karte SD..."));
     return true;
   }
   if (k == 's' || k == 'S') {
@@ -62,13 +62,13 @@ static bool musicKey(uint8_t k) {
     btAudioSendCmd(ACMD_CYCLE_OUT_MODE);
 #if HSOS_HAS_WIRELESS
     int nextM = ((int)audioSnap.outMode + 1) % 3;
-    const char* lbl = (nextM == AOUT_MODE_AUTO) ? "Wyjscie: AUTO (Jack->BT)"
-                    : (nextM == AOUT_MODE_JACK) ? "Wyjscie: JACK (PWM)"
-                                                : "Wyjscie: BLUETOOTH";
+    const char* lbl = (nextM == AOUT_MODE_AUTO) ? tr("Out: AUTO (Jack->BT)", "Wyjscie: AUTO (Jack->BT)")
+                    : (nextM == AOUT_MODE_JACK) ? tr("Out: JACK (PWM)",      "Wyjscie: JACK (PWM)")
+                                                : tr("Out: BLUETOOTH",       "Wyjscie: BLUETOOTH");
 #else
     int nextM = (audioSnap.outMode == AOUT_MODE_AUTO) ? AOUT_MODE_JACK : AOUT_MODE_AUTO;
-    const char* lbl = (nextM == AOUT_MODE_JACK) ? "Wyjscie: JACK (Wymusz.)"
-                                                : "Wyjscie: AUTO (Pin GP8)";
+    const char* lbl = (nextM == AOUT_MODE_JACK) ? tr("Out: JACK (Forced)", "Wyjscie: JACK (Wymusz.)")
+                                                : tr("Out: AUTO (Pin GP8)", "Wyjscie: AUTO (Pin GP8)");
 #endif
     showToast(lbl);
     return true;
@@ -158,18 +158,19 @@ static void drawMusicTopBar(U8G2 &d) {
                          ? ((audioSnap.outMode == AOUT_MODE_JACK) ? "JACK*" : "JACK")
                          : (audioSnap.activeSink == ASINK_BT)
                          ? ((audioSnap.outMode == AOUT_MODE_BT) ? "BT*" : "BT")
-                         : "BRAK";
+                         : tr("NONE", "BRAK");
   d.drawBox(2, 11, 29, 8);
   d.setDrawColor(0);
   d.drawStr(4, 18, outBadge);
   d.setDrawColor(1);
 
-  const char* st = audioSnap.musicPlaying ? (audioSnap.musicPaused ? "PAUZA" : "GRA") : "STOP";
+  const char* st = audioSnap.musicPlaying
+                   ? (audioSnap.musicPaused ? tr("PAUSE", "PAUZA") : tr("PLAY", "GRA"))
+                   : "STOP";
   if (audioSnap.activeSink == ASINK_BT && !audioSnap.btConnected) st = "NO BT";
   else if (audioSnap.activeSink == ASINK_NONE) st = "NO JK";
   d.drawStr(34, 18, st);
 
-  // Suwak głośności + procenty
   d.drawFrame(68, 12, 26, 6);
   int vw = (audioSnap.volume * 22) / 100;
   if (vw > 0) d.drawBox(70, 14, vw, 2);
@@ -191,11 +192,10 @@ static void drawNowPlaying(U8G2 &d) {
     if (trackSel >= audioSnap.trackCount) trackSel = audioSnap.trackCount - 1;
     btAudioGetTrackName(trackSel, title, sizeof(title));
   } else {
-    strncpy(title, "Brak utworu", sizeof(title));
+    snprintf(title, sizeof(title), "%s", tr("No track", "Brak utworu"));
   }
   stripMp3Ext(title);
 
-  // Nazwa utworu z delikatnym przewijaniem, jeśli przekracza 16 znaków
   size_t tlen = strlen(title);
   int off = 0;
   if (tlen > 16 && audioSnap.musicPlaying && !audioSnap.musicPaused) {
@@ -209,13 +209,12 @@ static void drawNowPlaying(U8G2 &d) {
   d.setFont(u8g2_font_6x10_tr);
   d.drawStr(25, 31, visTitle);
 
-  // Parametry lub podpowiedź wyjścia audio
   d.setFont(u8g2_font_5x7_tr);
   char sub[24];
   if (audioSnap.activeSink == ASINK_NONE) {
-    snprintf(sub, sizeof(sub), "Wepnij jack lub [O]");
+    snprintf(sub, sizeof(sub), "%s", tr("Plug jack or [O]", "Wepnij jack lub [O]"));
   } else if (audioSnap.activeSink == ASINK_BT && !audioSnap.btConnected) {
-    snprintf(sub, sizeof(sub), "Polacz BT / jack");
+    snprintf(sub, sizeof(sub), "%s", tr("Conn BT / jack", "Polacz BT / jack"));
   } else if (audioSnap.musicPlaying) {
     int khz = audioSnap.sampleRate / 1000;
     if (audioSnap.bitrateKbps > 0) {
@@ -224,11 +223,10 @@ static void drawNowPlaying(U8G2 &d) {
       snprintf(sub, sizeof(sub), "%dkHz %s", khz, (audioSnap.activeSink == ASINK_JACK) ? "PWM" : "A2DP");
     }
   } else {
-    snprintf(sub, sizeof(sub), "Utwor %d/%d", trackSel + 1, audioSnap.trackCount);
+    snprintf(sub, sizeof(sub), "%s %d/%d", tr("Track", "Utwor"), trackSel + 1, audioSnap.trackCount);
   }
   d.drawStr(25, 40, sub);
 
-  // Pasek postępu i czas MM:SS
   char tStr[10];
   uint32_t sec = audioSnap.elapsedSec;
   snprintf(tStr, sizeof(tStr), "%02lu:%02lu", (unsigned long)(sec / 60), (unsigned long)(sec % 60));
@@ -246,7 +244,7 @@ static void drawNowPlaying(U8G2 &d) {
   d.drawStr(104, 51, sub);
 
   d.drawHLine(0, 53, 128);
-  d.drawStr(2, 62, "Spc:|| </>:Vol Tab:Lis F1");
+  d.drawStr(2, 62, tr("Spc:|| </>:Vol Tab:List F1", "Spc:|| </>:Vol Tab:Lis F1"));
 }
 
 static void drawPlaylist(U8G2 &d) {
@@ -274,7 +272,7 @@ static void drawPlaylist(U8G2 &d) {
   }
 
   d.drawHLine(0, 53, 128);
-  d.drawStr(2, 62, "Ent:G </>:Vol Tab:Odt F1");
+  d.drawStr(2, 62, tr("Ent:Ply </>:Vol Tab:Plyr?", "Ent:G </>:Vol Tab:Odt F1"));
 }
 
 static void musicDraw() {
@@ -285,18 +283,18 @@ static void musicDraw() {
 
   if (!audioSnap.sdReady) {
     d.setFont(u8g2_font_5x7_tr);
-    d.drawStr(4, 34, "Brak karty SD (FAT32)!");
+    d.drawStr(4, 34, tr("No SD card (FAT32)!", "Brak karty SD (FAT32)!"));
     d.drawHLine(0, 53, 128);
-    d.drawStr(2, 62, "R:Montuj  Esc:M  F1:Pom");
+    d.drawStr(2, 62, tr("R:Mount  Esc:M  F1:Help", "R:Montuj  Esc:M  F1:Pom"));
     rysujToastJesliAktywny();
     uiFinishFrame();
     return;
   }
   if (audioSnap.trackCount == 0) {
     d.setFont(u8g2_font_5x7_tr);
-    d.drawStr(4, 34, "Brak plikow .mp3 na /");
+    d.drawStr(4, 34, tr("No .mp3 files in /", "Brak plikow .mp3 na /"));
     d.drawHLine(0, 53, 128);
-    d.drawStr(2, 62, "R:Odswiez  Esc:M  F1:Pom");
+    d.drawStr(2, 62, tr("R:Rescan  Esc:M  F1:Help", "R:Odswiez  Esc:M  F1:Pom"));
     rysujToastJesliAktywny();
     uiFinishFrame();
     return;
@@ -309,7 +307,16 @@ static void musicDraw() {
   uiFinishFrame();
 }
 
-static const char* const HELP_MUSIC[] = {
+static const char* const HELP_MUSIC_EN[] = {
+  "^ / v: Track (List/Skip)",
+  "Enter: Play / Pause",
+  "Space: Pause | S: Stop",
+  "</> or -/+: Volume",
+  "Tab: Player / Playlist",
+  "O: Output AUTO/JACK/BT",
+  "R: Rescan SD | Esc: Menu"
+};
+static const char* const HELP_MUSIC_PL[] = {
   "^ / v: Utwor (Lista/Next)",
   "Enter: Graj / Pauza",
   "Spacja: Pauza | S: Stop",
@@ -319,4 +326,4 @@ static const char* const HELP_MUSIC[] = {
   "R: Skanuj SD | Esc: Menu"
 };
 
-const AppScreen screenAppMusic = { musicEnter, musicTick, musicKey, musicDraw, HELP_MUSIC, 7 };
+const AppScreen screenAppMusic = { musicEnter, musicTick, musicKey, musicDraw, HELP_MUSIC_EN, HELP_MUSIC_PL, 7 };

@@ -150,7 +150,7 @@ struct CalcParser {
 
 static void formatDecimal(double w, char* out, size_t cap) {
   if (isnan(w) || isinf(w) || fabs(w) >= 100000000.0) {
-    snprintf(out, cap, "Przepeln.");
+    snprintf(out, cap, "%s", tr("Overflow", "Przepeln."));
     return;
   }
   double roundedInt = round(w);
@@ -210,7 +210,7 @@ static void refreshResultDisplay() {
       snprintf(resAlt, sizeof(resAlt), "dec: %s", decBuf);
     } else {
       snprintf(resPrimary, sizeof(resPrimary), "%s", decBuf);
-      snprintf(resAlt, sizeof(resAlt), "ulamek: %s", frBuf);
+      snprintf(resAlt, sizeof(resAlt), "%s %s", tr("frac:", "ulamek:"), frBuf);
     }
   } else {
     snprintf(resPrimary, sizeof(resPrimary), "%s", decBuf);
@@ -236,11 +236,11 @@ static void evaluateExpr() {
   if (parser.err != CALC_OK) {
     lastEvalOk = false;
     switch (parser.err) {
-      case CALC_ERR_DIV0:     snprintf(resPrimary, sizeof(resPrimary), "Blad /0"); break;
-      case CALC_ERR_DOMAIN:   snprintf(resPrimary, sizeof(resPrimary), "Blad pierw."); break;
-      case CALC_ERR_PAREN:    snprintf(resPrimary, sizeof(resPrimary), "Blad nawias"); break;
-      case CALC_ERR_OVERFLOW: snprintf(resPrimary, sizeof(resPrimary), "Przepeln."); break;
-      default:                snprintf(resPrimary, sizeof(resPrimary), "Blad skladni"); break;
+      case CALC_ERR_DIV0:     snprintf(resPrimary, sizeof(resPrimary), "%s", tr("Err /0", "Blad /0")); break;
+      case CALC_ERR_DOMAIN:   snprintf(resPrimary, sizeof(resPrimary), "%s", tr("Err sqrt", "Blad pierw.")); break;
+      case CALC_ERR_PAREN:    snprintf(resPrimary, sizeof(resPrimary), "%s", tr("Err paren", "Blad nawias")); break;
+      case CALC_ERR_OVERFLOW: snprintf(resPrimary, sizeof(resPrimary), "%s", tr("Overflow", "Przepeln.")); break;
+      default:                snprintf(resPrimary, sizeof(resPrimary), "%s", tr("Syntax err", "Blad skladni")); break;
     }
     return;
   }
@@ -264,7 +264,7 @@ static bool calcKey(uint8_t k) {
   if (k == KEY_F2) {
     fracMode = !fracMode;
     refreshResultDisplay();
-    showToast(fracMode ? "Tryb: Ulamki" : "Tryb: Dziesietne", 900);
+    showToast(fracMode ? tr("Mode: Fractions", "Tryb: Ulamki") : tr("Mode: Decimal", "Tryb: Dziesietne"), 900);
     return true;
   }
 
@@ -323,8 +323,8 @@ static void calcDraw() {
   d.clearBuffer();
   rysujPasekStanu();
   d.setFont(u8g2_font_5x7_tr);
-  d.drawStr(2, 18, "KALKULATOR");
-  d.drawStr(88, 18, fracMode ? "[ULAM]" : "[DZIES]");
+  d.drawStr(2, 18, tr("CALCULATOR", "KALKULATOR"));
+  d.drawStr(88, 18, fracMode ? tr("[FRAC]", "[ULAM]") : tr("[DEC]", "[DZIES]"));
 
   // Wyświetl maksymalnie 47 ostatnich znaków wyrażenia w 2 wierszach (24 znaki/wiersz)
   size_t elen = strlen(expr);
@@ -362,7 +362,18 @@ static void calcDraw() {
   uiFinishFrame();
 }
 
-static const char* const HELP_CALC[] = {
+static const char* const HELP_CALC_EN[] = {
+  "0-9 . ,: Digits & decimal",
+  "+ - * / ( ): Operations",
+  "^ or P: Power (e.g. 2^3)",
+  "R or S: Sqrt sqrt(...)",
+  "Q: Cube root cbrt(...)",
+  "F2: Fraction / Decimal",
+  "Ent or =: Evaluate",
+  "Bksp: Del | C/Del: Clear",
+  "Esc: Main menu"
+};
+static const char* const HELP_CALC_PL[] = {
   "0-9 . ,: Cyfry i ulamki",
   "+ - * / ( ): Dzialania",
   "^ lub P: Potega (np.2^3)",
@@ -374,4 +385,4 @@ static const char* const HELP_CALC[] = {
   "Esc: Menu glowne"
 };
 
-const AppScreen screenAppCalc = { nullptr, nullptr, calcKey, calcDraw, HELP_CALC, 9 };
+const AppScreen screenAppCalc = { nullptr, nullptr, calcKey, calcDraw, HELP_CALC_EN, HELP_CALC_PL, 9 };

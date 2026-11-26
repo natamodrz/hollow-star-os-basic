@@ -12,6 +12,8 @@ struct SysConfig {
   char ftpUser[24];
   char ftpPass[24];
   int volume;
+  uint8_t lang;      // 0 = English, 1 = Polski
+  bool setupDone;
 };
 
 struct DirEntryInfo {

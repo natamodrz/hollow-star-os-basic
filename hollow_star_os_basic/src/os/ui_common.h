@@ -8,7 +8,11 @@
 
 #define OS_BRAND_NAME    "HOLLOW STAR OS"
 #define OS_BRAND_EDITION "BASIC"
-#define OS_BRAND_VERSION "v1.1.0"
+#define OS_BRAND_VERSION "v1.2.0"
+
+static inline const char* tr(const char* en, const char* pl) {
+  return (sysConfig.lang == 1) ? pl : en;
+}
 
 enum MdStyle : uint8_t {
   MD_NORMAL,

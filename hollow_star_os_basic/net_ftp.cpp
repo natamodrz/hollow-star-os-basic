@@ -60,7 +60,7 @@ static void setFtpStatus(const char* txt) {
 
 static void internalNtpSync() {
   if (WiFi.status() != WL_CONNECTED) {
-    setWifiStatus("Brak Wi-Fi dla NTP");
+    setWifiStatus("No Wi-Fi for NTP");
     return;
   }
   setWifiStatus("Sync NTP...", true);
@@ -90,16 +90,16 @@ static void internalNtpSync() {
     xSemaphoreGive(netMutex);
     markNetDirty();
   } else {
-    setWifiStatus("Blad NTP (timeout)");
+    setWifiStatus("NTP timeout");
   }
 }
 
 static void internalWifiConnect() {
   if (sysConfig.wifiSsid[0] == '\0') {
-    setWifiStatus("Brak zapisanej sieci");
+    setWifiStatus("No saved network");
     return;
   }
-  setWifiStatus("Lacze z Wi-Fi...", true);
+  setWifiStatus("Connecting WiFi...", true);
   WiFi.mode(WIFI_STA);
   WiFi.begin(sysConfig.wifiSsid, sysConfig.wifiPass);
 
@@ -128,12 +128,12 @@ static void internalWifiConnect() {
     netState.wifiRssi = -127;
     netState.ipStr[0] = '\0';
     xSemaphoreGive(netMutex);
-    setWifiStatus("Nie polaczono");
+    setWifiStatus("Connect failed");
   }
 }
 
 static void internalWifiScan() {
-  setWifiStatus("Skanuje Wi-Fi...", true);
+  setWifiStatus("Scanning WiFi...", true);
   WiFi.mode(WIFI_STA);
   int n = WiFi.scanNetworks();
 
@@ -148,7 +148,7 @@ static void internalWifiScan() {
     netState.apCount++;
   }
   netState.wifiBusy = false;
-  snprintf(netState.wifiStatus, sizeof(netState.wifiStatus), "Sieci: %d", netState.apCount);
+  snprintf(netState.wifiStatus, sizeof(netState.wifiStatus), "Networks: %d", netState.apCount);
   xSemaphoreGive(netMutex);
 
   WiFi.scanDelete();
@@ -183,11 +183,11 @@ static WiFiClient ftpAcceptData() {
 
 static void ftpStart(bool useSD) {
   if (WiFi.status() != WL_CONNECTED) {
-    setFtpStatus("Najpierw polacz Wi-Fi");
+    setFtpStatus("Connect Wi-Fi first");
     return;
   }
   if (useSD && !sdMounted && !storageMountSD()) {
-    setFtpStatus("Blad montowania SD!");
+    setFtpStatus("SD mount error!");
     return;
   }
   ftpOnSD = useSD;
@@ -202,14 +202,14 @@ static void ftpStart(bool useSD) {
   xSemaphoreTake(netMutex, portMAX_DELAY);
   netState.ftpRunning = true;
   netState.ftpUseSD = useSD;
-  strncpy(netState.ftpStatus, useSD ? "Dziala (SD :21)" : "Dziala (FL :21)", sizeof(netState.ftpStatus) - 1);
+  strncpy(netState.ftpStatus, useSD ? "Running (SD :21)" : "Running (FL :21)", sizeof(netState.ftpStatus) - 1);
   xSemaphoreGive(netMutex);
   markNetDirty();
 }
 
 static void ftpSetDrive(bool useSD) {
   if (useSD && !sdMounted && !storageMountSD()) {
-    setFtpStatus("Blad montowania SD!");
+    setFtpStatus("SD mount error!");
     return;
   }
   if (ftpCtrlCli) ftpCtrlCli.stop();
@@ -222,7 +222,7 @@ static void ftpSetDrive(bool useSD) {
   xSemaphoreTake(netMutex, portMAX_DELAY);
   netState.ftpUseSD = useSD;
   if (ftpActive) {
-    strncpy(netState.ftpStatus, useSD ? "Dziala (SD :21)" : "Dziala (FL :21)", sizeof(netState.ftpStatus) - 1);
+    strncpy(netState.ftpStatus, useSD ? "Running (SD :21)" : "Running (FL :21)", sizeof(netState.ftpStatus) - 1);
   }
   xSemaphoreGive(netMutex);
   markNetDirty();
@@ -236,7 +236,7 @@ static void ftpStop() {
 
   xSemaphoreTake(netMutex, portMAX_DELAY);
   netState.ftpRunning = false;
-  strncpy(netState.ftpStatus, "Zatrzymany", sizeof(netState.ftpStatus) - 1);
+  strncpy(netState.ftpStatus, "Stopped", sizeof(netState.ftpStatus) - 1);
   xSemaphoreGive(netMutex);
   markNetDirty();
 }
@@ -273,9 +273,9 @@ static void ftpHandleCommand(const String &raw) {
     return;
   } else if (cmd == "QUIT") {
     ftpAuthed = false;
-    ftpCtrlCli.print("221 Do zobaczenia\r\n");
+    ftpCtrlCli.print("221 Goodbye\r\n");
     ftpCtrlCli.stop();
-    setFtpStatus(ftpOnSD ? "Dziala (SD :21)" : "Dziala (FL :21)");
+    setFtpStatus(ftpOnSD ? "Running (SD :21)" : "Running (FL :21)");
     return;
   } else if (cmd == "SYST") {
     ftpCtrlCli.print("215 UNIX Type: L8\r\n");
@@ -441,7 +441,7 @@ static void ftpPoll() {
       ftpAuthed = false;
       ftpLoginUser[0] = '\0';
       ftpCtrlCli.print("220 Hollow Star OS FTP Ready\r\n");
-      setFtpStatus("Klient polaczony");
+      setFtpStatus("Client connected");
     }
     return;
   }
@@ -455,7 +455,7 @@ static void ftpPoll() {
       ftpCmdLine = "";
       if (!ftpCtrlCli.connected()) {
         ftpAuthed = false;
-        setFtpStatus(ftpOnSD ? "Dziala (SD :21)" : "Dziala (FL :21)");
+        setFtpStatus(ftpOnSD ? "Running (SD :21)" : "Running (FL :21)");
         break;
       }
     } else if (ftpCmdLine.length() < 96) {
@@ -493,7 +493,7 @@ static void taskNet(void *pvParams) {
           netState.wifiRssi = -127;
           netState.ipStr[0] = '\0';
           xSemaphoreGive(netMutex);
-          setWifiStatus("Rozlaczono");
+          setWifiStatus("Disconnected");
           break;
         case NCMD_NTP_SYNC:
           internalNtpSync();
@@ -529,7 +529,7 @@ static void taskNet(void *pvParams) {
         netState.wifiRssi = -127;
         netState.ipStr[0] = '\0';
         xSemaphoreGive(netMutex);
-        setWifiStatus("Rozlaczono");
+        setWifiStatus("Disconnected");
       }
     }
 
@@ -541,8 +541,8 @@ static void taskNet(void *pvParams) {
 void netFtpStartTask() {
   memset(&netState, 0, sizeof(netState));
   netState.wifiRssi = -127;
-  strncpy(netState.wifiStatus, "Niepolaczono", sizeof(netState.wifiStatus) - 1);
-  strncpy(netState.ftpStatus,  "Zatrzymany",   sizeof(netState.ftpStatus) - 1);
+  strncpy(netState.wifiStatus, "Not connected", sizeof(netState.wifiStatus) - 1);
+  strncpy(netState.ftpStatus,  "Stopped",       sizeof(netState.ftpStatus) - 1);
 
   netMutex = xSemaphoreCreateMutex();
   netFtpReloadCreds();
