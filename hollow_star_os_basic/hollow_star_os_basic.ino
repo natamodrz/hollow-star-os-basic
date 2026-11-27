@@ -17,6 +17,7 @@
 #include "src/apps/app_files.h"
 #include "src/apps/app_music.h"
 #include "src/apps/app_ftp.h"
+#include "src/apps/app_basic.h"
 #include "src/apps/app_settings.h"
 #include "src/games/game_brick.h"
 #include "src/games/game_tetris.h"
@@ -41,6 +42,7 @@ static const AppScreen* const SCREENS[APP_STATE_COUNT] = {
   &screenAppFiles,     // APP_FILES
   &screenToolsMenu,    // APP_TOOLS_MENU
   &screenAppFtp,       // APP_FTP
+  &screenAppBasic,     // APP_BASIC
   nullptr,             // APP_SUSPEND
   &screenGameBrick,    // APP_BRICK
   &screenGameTetris,   // APP_TETRIS

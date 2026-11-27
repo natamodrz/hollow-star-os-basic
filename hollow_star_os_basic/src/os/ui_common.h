@@ -8,7 +8,7 @@
 
 #define OS_BRAND_NAME    "HOLLOW STAR OS"
 #define OS_BRAND_EDITION "BASIC"
-#define OS_BRAND_VERSION "v1.2.0"
+#define OS_BRAND_VERSION "v1.3.0"
 
 static inline const char* tr(const char* en, const char* pl) {
   return (sysConfig.lang == 1) ? pl : en;
@@ -34,15 +34,36 @@ struct RacingEnemy {
   int8_t y;
 };
 
+struct FileTreeNode {
+  char name[36];
+  char fullPath[84];
+  uint32_t size;
+  bool isDir;
+  uint8_t depth;
+  bool expanded;
+  uint8_t contMask;
+  bool isLast;
+};
+
+struct BasicLine {
+  uint16_t num;
+  char text[46];
+};
+
 // Współdzielony obszar RAM dla aktualnie otwartej aplikacji/gry
 union AppScratchRam {
   struct {
     DirEntryInfo items[MAX_DIR_ENTRIES];
+    FileTreeNode tree[28];
   } files;
   struct {
     char buf[1025];
     MdLine lines[48];
   } notes;
+  struct {
+    BasicLine lines[40];
+    char out[4][26];
+  } basic;
   struct {
     uint8_t cegly[4][8];
   } brick;
@@ -95,3 +116,10 @@ void rysujHollowStar(int cx, int cy, bool smallIcon);
 void rysujBootSplash(const char* statusLine);
 void rysujPasekStanu();
 void rysujPopupKoniecGry(const char* title);
+
+// Wspólne ikony 7x7 / 6x7 (wyłącznie ostre kształty)
+void rysujIkoneFolder(int x, int y);
+void rysujIkonePlik(int x, int y);
+void rysujIkoneMuzyka(int x, int y);
+void rysujIkoneCzip(int x, int y);
+void rysujIkoneKartaSD(int x, int y);

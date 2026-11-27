@@ -3,7 +3,7 @@
 > [!WARNING]
 > **Vibe-Coded Project Notice:** This project is **vibe-coded** — built and iterated rapidly with AI coding assistance (`Google Antigravity`). While verified to compile cleanly for both Raspberry Pi Pico and Pico W, treat it as experimental hobby firmware: inspect the code and wiring before use, keep backups of important SD card data, and report or PR any edge-case bugs you encounter!
 
-A compact, sharp-pixel embedded operating system for the **Raspberry Pi Pico & Raspberry Pi Pico W (RP2040)** running on **FreeRTOS SMP** (Arduino-Pico core v6.4.0), featuring a 128×64 monochrome LCD UI, USB 2.4 GHz keyboard input via PIO, dual **Bluetooth A2DP + 3.5 mm PWM Stereo Headphone Jack** audio, Wi-Fi + NTP clock sync, an authenticated PASV FTP server, a **First-Time Setup Wizard**, full **English / Polish (`EN`/`PL`)** bilingual UI, Markdown notes, dual-drive file explorer, expression calculator, system monitor, and classic retro games.
+A compact, sharp-pixel embedded operating system for the **Raspberry Pi Pico & Raspberry Pi Pico W (RP2040)** running on **FreeRTOS SMP** (Arduino-Pico core v6.4.0), featuring a 128×64 monochrome LCD UI, USB 2.4 GHz keyboard input via PIO, dual **Bluetooth A2DP + 3.5 mm PWM Stereo Headphone Jack** audio, Wi-Fi + NTP clock sync, an authenticated PASV FTP server, a **First-Time Setup Wizard**, full **English / Polish (`EN`/`PL`)** bilingual UI, **TinyBASIC** interpreter, Markdown notes with blinking cursor & `F2` tutorial, expandable tree-view File Explorer, expression calculator, system monitor, and classic retro games.
 
 ---
 
@@ -29,16 +29,19 @@ A compact, sharp-pixel embedded operating system for the **Raspberry Pi Pico & R
     4. **Welcome Screen**: Hollow Star branded `Welcome!` / `Witaj!` card
 - **Bilingual OS (`English` / `Polski`)**: English by default across all menus, apps, settings, games, and `F1` help overlays, with instant switching to Polish in 1st Setup or **Settings -> Language**.
 - **Raspberry Pi Pico & Pico W Builds**:
-  - **Pico W (`hollow-star-os-picow-v1.2.0.uf2`)**: Full wireless suite (Bluetooth A2DP, Wi-Fi, NTP, FTP server) + 3.5 mm Headphone Jack.
-  - **Standard Pico (`hollow-star-os-pico-v1.2.0.uf2`)**: Clean build without CYW43 — Bluetooth, Wi-Fi, NTP, and FTP UI menus are automatically hidden, while MP3 playback works over the 3.5 mm Headphone Jack.
+  - **Pico W (`hollow-star-os-picow-v1.3.0.uf2`)**: Full wireless suite (Bluetooth A2DP, Wi-Fi, NTP, FTP server) + 3.5 mm Headphone Jack.
+  - **Standard Pico (`hollow-star-os-pico-v1.3.0.uf2`)**: Clean build without CYW43 — Bluetooth, Wi-Fi, NTP, and FTP UI menus are automatically hidden, while MP3 playback works over the 3.5 mm Headphone Jack.
+- **TinyBASIC Interpreter (`v1.3.0`)**:
+  - Built-in line-numbered BASIC interpreter & interactive REPL on Main Menu Page 2 (`LIST`, `RUN`, `NEW`, `CLR`, `SAVE`, `LOAD`, `FILES`, `HELP`, `PRINT`/`?`, `LET`, `INPUT`, `IF..THEN`, `GOTO`, `GOSUB/RETURN`, `FOR..TO..STEP/NEXT`, `CLS`, `DELAY`, `REM`, `END/STOP`, `A–Z` 32-bit integer variables, `RND()`, `ABS()`, and `Esc` break). Load and run `.bas` programs directly from File Explorer!
 - **Audio Player & 3.5 mm Headphone Jack (`BT A2DP` / `PWM Jack`)**:
   - Plugging headphones/speakers into the 3.5 mm jack (`GP8` active-LOW detect) automatically disables Bluetooth and routes PCM audio to stereo PWM (`GP6` = L, `GP7` = R).
   - Manual output override (`O`: `AUTO` / `JACK` / `BT`), synchronized `MP3DecoderHelix` playback with `ID3v2` skip, 512-byte aligned A2DP writes (`24 KB` ring buffer, priority-2 audio task), `0–100%` software volume (`←`/`→` or `-`/`+`), animated 4-band equalizer, progress bar, and elapsed timer.
-- **Sys Info Monitor**: Live RP2040 CPU temperature, used/total heap RAM (`KB` & `%`), and free/total capacity on Flash (`LittleFS`) and FAT32 SD card.
-- **Markdown Notes (`.md`)**: Launch Notes to pick drive (`Flash` / `SD`), folder, and filename first, then edit an empty `.md` file (`Ctrl+S` / `F3` save) or toggle live Markdown preview (`Tab` / `F2`).
+- **Sys Info Monitor**: Shows a `"Please wait..."` indicator while scanning disks, then displays live RP2040 CPU temperature, used/total heap RAM (`KB` & `%`), and free/total capacity on Flash (`LittleFS` Chip icon) and FAT32 SD card (SD icon).
+- **Markdown Notes (`.md`)**: Choose **New Note** (defaults to `SD:/docs/`, auto-creating `/docs`) or **Load Existing** (browse Flash/SD directories), edit with a **blinking block cursor** and full `↑`/`↓`/`←`/`→` cursor navigation (`Ctrl+S` / `F3` save), toggle live preview (`Tab`), or press **`F2`** for a built-in scrollable **Markdown Tutorial**.
+- **Tree-View File Explorer**: Expandable Flash & SD directory tree (`|---` connectors + sharp Folder, File, Music, Chip, and SD Card icons) supporting `.md` notes, `.mp3` playback, and `.bas` TinyBASIC execution.
 - **Authenticated PASV FTP Server *(Pico W)***: Live Flash/SD drive switching (`←` / `→` / `Tab` / `D`), SD remount (`R`), and configurable FTP username/password (`U` / `P`, default `hollow` / `hollow`).
-- **Dual-Drive File Explorer, Expression Calculator & Classic Games**: Browse Flash & SD, compute expressions (`+ - * / ( ) ^ sqrt cbrt` + fraction toggle `F2`), and play Brick Breaker, Tetris, and Racing.
-- **Sharp-Pixel UI & Universal `F1` Help**: Zero rounded corners, boot splash, status bar, hardware suspend (`setPowerSave(1)`), and context-sensitive `F1` shortcuts help on every screen.
+- **Expression Calculator & Classic Games**: Compute expressions (`+ - * / ( ) ^ sqrt cbrt` + fraction toggle `F2`), and play Brick Breaker, Tetris, and Brick Game Racing.
+- **Sharp-Pixel UI & Universal `F1` Help**: Zero rounded corners, custom pixel icons (Folder, File, Music, Chip, SD Card), boot splash, status bar, hardware suspend (`setPowerSave(1)`), and context-sensitive `F1` shortcuts help on every screen.
 
 ---
 
@@ -54,7 +57,7 @@ Prebuilt flashable `.uf2` binaries (`Pico` and `Pico W`) are published directly 
 
 This repository follows strict **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
 - **`MAJOR`**: Major architectural rewrites or breaking changes
-- **`MINOR`**: New features (e.g. `v1.1.0` PWM Jack & Sys Info, `v1.2.0` 1st Setup & English/Polish i18n)
+- **`MINOR`**: New features (e.g. `v1.1.0` PWM Jack & Sys Info, `v1.2.0` 1st Setup & English/Polish i18n, `v1.3.0` TinyBASIC, Tree Explorer, Notes cursor & F2 tutorial)
 - **`PATCH`**: Small fixes and refinements
 
 ---
@@ -109,8 +112,10 @@ Full wiring diagrams and the passive RC audio filter schematic are in [docs/wiri
 | **Main Menu** | `Arrows` / `Tab` / `Enter` | Navigate / Page 1–2 / Launch |
 | **Music Player** | `↑` / `↓` / `Enter` / `Space` / `S` | Track / Play / Pause / Stop |
 | **Music Player** | `←` / `→` / `-` / `+` / `Tab` / `O` | Volume -/+ / Player↔Playlist / Output (`AUTO`/`JACK`/`BT`) |
-| **Notes (`.md`)** | `↑` / `↓` / `←` / `→` / `Enter` / `F3` | Setup Drive, Folder, Name / Edit empty or open existing |
-| **Notes Editor** | `Ctrl+S` or `F3` / `Tab` or `F2` | Save `.md` / Toggle Markdown preview |
+| **Notes (`.md`)** | `↑` / `↓` / `←` / `→` / `Enter` | Choose New (default `SD:/docs/`) or Load from Flash/SD tree |
+| **Notes Editor** | `↑` `↓` `←` `→` / `Ctrl+S` or `F3` / `Tab` / `F2` | Navigate cursor / Save `.md` / Preview / Markdown Tutorial |
+| **File Explorer** | `↑` `↓` / `→` `Enter` / `←` / `Tab` | Select / Expand or Open (`.md`, `.mp3`, `.bas`) / Collapse / Flash↔SD |
+| **TinyBASIC** | `Enter` / `Esc` | Run command or store numbered line / Break program or Exit |
 | **FTP Server *(Pico W)*** | `U` / `P` / `←` `→` `D` / `Enter` / `R` | Set User / Set Password / Flash↔SD / Start-Stop / Remount SD |
 | **Sys Info** | `R` / `Esc` | Refresh Flash & SD space / Menu |
 

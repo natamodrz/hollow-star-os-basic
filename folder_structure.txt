@@ -21,16 +21,17 @@ hollow-star-os-basic/                # Repository root
     └── src/                         # UI, apps, and games modules
         ├── os/
         │   ├── app_types.h          # AppState, board detection (HSOS_HAS_WIRELESS), modals, AppScreen
-        │   ├── ui_common.h / .cpp   # Shared RAM union, tr() i18n helper, status bar, modals, F1 overlay
-        │   └── ui_menus.h / .cpp    # Bilingual menus (hides BT/Wi-Fi/NTP/FTP on standard Pico)
+        │   ├── ui_common.h / .cpp   # Shared RAM union, tr() i18n, sharp icons (Folder/File/Music/Chip/SD), modals, F1 overlay
+        │   └── ui_menus.h / .cpp    # Bilingual menus (hides BT/Wi-Fi/NTP/FTP on standard Pico, includes TinyBASIC)
         ├── apps/
         │   ├── app_setup.h / .cpp   # 1st-Time Setup Wizard (Language -> Wi-Fi -> Time -> Welcome)
-        │   ├── app_temp.h / .cpp    # Sys Info: RP2040 temp, used RAM, Flash & SD free space
+        │   ├── app_temp.h / .cpp    # Sys Info: wait popup + RP2040 temp, used RAM, Flash & SD free space
         │   ├── app_calc.h / .cpp    # Expression calculator (fractions, roots, powers, parentheses)
-        │   ├── app_notes.h / .cpp   # Location/filename creator + Markdown (.md) editor & preview
-        │   ├── app_files.h / .cpp   # Dual-drive File Explorer (Flash / SD)
+        │   ├── app_notes.h / .cpp   # New/Load prompt, SD/Flash browser, blinking cursor, F2 MD tutorial
+        │   ├── app_files.h / .cpp   # Expandable tree File Explorer (Flash / SD, .bas launch)
         │   ├── app_music.h / .cpp   # MP3 player (BT A2DP / PWM Jack, volume, equalizer, progress)
         │   ├── app_ftp.h / .cpp     # FTP server UI (drive switch + username/password settings)
+        │   ├── app_basic.h / .cpp   # TinyBASIC interpreter & interactive REPL (.bas load/save/run)
         │   └── app_settings.h / .cpp# BT, Wi-Fi/NTP, Contrast, Time, Language, Format, About
         └── games/
             ├── game_brick.h / .cpp  # Brick Breaker

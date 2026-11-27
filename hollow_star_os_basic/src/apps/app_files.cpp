@@ -1,19 +1,17 @@
 #include "app_files.h"
 #include "app_notes.h"
+#include "app_basic.h"
 #include "../os/ui_common.h"
 #include "../../usb_kbd.h"
 #include "../../storage_cfg.h"
 #include "../../bt_audio.h"
+#include <new>
 
-static bool fmOnSD = false;
-static char fmPath[128] = "/";
+static bool fmOnSD = true;
 static int  fmCount = 0;
 static int  fmSel = 0;
-
-static void buildFullPath(const char* name, char* out, size_t cap) {
-  if (strcmp(fmPath, "/") == 0) snprintf(out, cap, "/%s", name);
-  else                          snprintf(out, cap, "%s/%s", fmPath, name);
-}
+static char expandedDirs[6][84];
+static int  expandedCount = 0;
 
 static bool hasExtCI(const char* name, const char* ext) {
   size_t nl = strlen(name), el = strlen(ext);
@@ -28,16 +26,90 @@ static bool isTextEditable(const char* name) {
          hasExtCI(name, ".json");
 }
 
+static bool isDirExpanded(const char* fullPath) {
+  for (int i = 0; i < expandedCount; i++) {
+    if (strcmp(expandedDirs[i], fullPath) == 0) return true;
+  }
+  return false;
+}
+
+static void toggleDirExpanded(const char* fullPath) {
+  for (int i = 0; i < expandedCount; i++) {
+    if (strcmp(expandedDirs[i], fullPath) == 0) {
+      for (int j = i; j < expandedCount - 1; j++) {
+        memcpy(expandedDirs[j], expandedDirs[j + 1], sizeof(expandedDirs[0]));
+      }
+      expandedCount--;
+      return;
+    }
+  }
+  if (expandedCount < 6) {
+    strncpy(expandedDirs[expandedCount], fullPath, sizeof(expandedDirs[0]) - 1);
+    expandedDirs[expandedCount][sizeof(expandedDirs[0]) - 1] = '\0';
+    expandedCount++;
+  }
+}
+
+static void buildTreeRecursive(const char* dirPath, uint8_t depth, uint8_t contMask) {
+  if (depth >= 3 || fmCount >= 28) return;
+  DirEntryInfo *entries = new (std::nothrow) DirEntryInfo[16];
+  if (!entries) return;
+
+  int n = storageListDir(fmOnSD, dirPath, entries, 16);
+  for (int i = 0; i < n && fmCount < 28; i++) {
+    bool isLast = (i == n - 1);
+    FileTreeNode &node = appScratch.files.tree[fmCount++];
+    strncpy(node.name, entries[i].name, sizeof(node.name) - 1);
+    node.name[sizeof(node.name) - 1] = '\0';
+
+    if (strcmp(dirPath, "/") == 0) snprintf(node.fullPath, sizeof(node.fullPath), "/%s", entries[i].name);
+    else                           snprintf(node.fullPath, sizeof(node.fullPath), "%s/%s", dirPath, entries[i].name);
+
+    node.size = entries[i].size;
+    node.isDir = entries[i].isDir;
+    node.depth = depth;
+    node.expanded = entries[i].isDir && isDirExpanded(node.fullPath);
+    node.contMask = contMask;
+    node.isLast = isLast;
+
+    if (node.expanded) {
+      uint8_t nextMask = contMask;
+      if (!isLast && depth < 7) nextMask |= (uint8_t)(1U << depth);
+      buildTreeRecursive(node.fullPath, depth + 1, nextMask);
+    }
+  }
+  delete[] entries;
+}
+
 void appFilesRefresh() {
   if (fmOnSD && !sdMounted) storageMountSD();
-  fmCount = storageListDir(fmOnSD, fmPath, appScratch.files.items, MAX_DIR_ENTRIES);
+  fmCount = 0;
+  buildTreeRecursive("/", 0, 0);
   if (fmSel >= fmCount) fmSel = max(0, fmCount - 1);
 }
 
 void appFilesResetRoot() {
-  strcpy(fmPath, "/");
+  expandedCount = 0;
   fmSel = 0;
   appFilesRefresh();
+}
+
+static void getTargetDirForNew(char* out, size_t cap) {
+  if (fmCount > 0 && fmSel < fmCount) {
+    const FileTreeNode &node = appScratch.files.tree[fmSel];
+    if (node.isDir) {
+      snprintf(out, cap, "%s", node.fullPath);
+      return;
+    }
+    const char* slash = strrchr(node.fullPath, '/');
+    if (slash && slash != node.fullPath) {
+      size_t len = min((size_t)(slash - node.fullPath), cap - 1);
+      memcpy(out, node.fullPath, len);
+      out[len] = '\0';
+      return;
+    }
+  }
+  snprintf(out, cap, "/");
 }
 
 static bool filesKey(uint8_t k) {
@@ -53,8 +125,10 @@ static bool filesKey(uint8_t k) {
         } else {
           snprintf(fn, sizeof(fn), "%s.md", rawName);
         }
-        char full[128], initial[80];
-        buildFullPath(fn, full, sizeof(full));
+        char dirBase[84], full[128], initial[80];
+        getTargetDirForNew(dirBase, sizeof(dirBase));
+        if (strcmp(dirBase, "/") == 0) snprintf(full, sizeof(full), "/%s", fn);
+        else                           snprintf(full, sizeof(full), "%s/%s", dirBase, fn);
         snprintf(initial, sizeof(initial), "# %s\n", rawName);
         storageWriteText(fmOnSD, full, initial);
         modalClose();
@@ -64,9 +138,8 @@ static bool filesKey(uint8_t k) {
       modalClose();
     } else if (confirmed && modalGetMode() == MODAL_CONFIRM_DEL) {
       if (fmSel < fmCount) {
-        char full[128];
-        buildFullPath(appScratch.files.items[fmSel].name, full, sizeof(full));
-        bool ok = storageDeletePath(fmOnSD, full, appScratch.files.items[fmSel].isDir);
+        const FileTreeNode &node = appScratch.files.tree[fmSel];
+        bool ok = storageDeletePath(fmOnSD, node.fullPath, node.isDir);
         showToast(ok ? tr("Deleted!", "Usunieto!") : tr("Delete error", "Blad usuwania"));
         appFilesRefresh();
       }
@@ -80,14 +153,6 @@ static bool filesKey(uint8_t k) {
   } else if (k == KEY_TAB) {
     fmOnSD = !fmOnSD;
     appFilesResetRoot();
-  } else if (k == '\b') {
-    if (strcmp(fmPath, "/") != 0) {
-      char* slash = strrchr(fmPath, '/');
-      if (slash && slash != fmPath) *slash = '\0';
-      else                          strcpy(fmPath, "/");
-      fmSel = 0;
-      appFilesRefresh();
-    }
   } else if (k == KEY_F2 || k == 'n' || k == 'N') {
     modalOpenInput(MODAL_NEW_MD, tr("New file (.md):", "Nowy plik (.md):"));
   } else if (k == 'r' || k == 'R') {
@@ -100,24 +165,43 @@ static bool filesKey(uint8_t k) {
     appFilesRefresh();
   } else if (k == KEY_DEL && fmCount > 0) {
     char title[26];
-    snprintf(title, sizeof(title), "%s %.18s", tr("Del:", "Usun:"), appScratch.files.items[fmSel].name);
+    snprintf(title, sizeof(title), "%s %.18s", tr("Del:", "Usun:"), appScratch.files.tree[fmSel].name);
     modalOpenConfirm(MODAL_CONFIRM_DEL, title);
   } else if (fmCount > 0) {
-    if (k == KEY_UP)        fmSel = (fmSel + fmCount - 1) % fmCount;
-    else if (k == KEY_DOWN) fmSel = (fmSel + 1) % fmCount;
-    else if (k == '\n') {
-      char full[128];
-      const DirEntryInfo &item = appScratch.files.items[fmSel];
-      buildFullPath(item.name, full, sizeof(full));
-      if (item.isDir) {
-        strncpy(fmPath, full, sizeof(fmPath) - 1);
-        fmPath[sizeof(fmPath) - 1] = '\0';
-        fmSel = 0;
+    if (k == KEY_UP) {
+      fmSel = (fmSel + fmCount - 1) % fmCount;
+    } else if (k == KEY_DOWN) {
+      fmSel = (fmSel + 1) % fmCount;
+    } else if (k == KEY_LEFT) {
+      const FileTreeNode &node = appScratch.files.tree[fmSel];
+      if (node.isDir && node.expanded) {
+        toggleDirExpanded(node.fullPath);
         appFilesRefresh();
-      } else if (isTextEditable(item.name)) {
-        appNotesOpenFile(fmOnSD, full, APP_FILES, hasExtCI(item.name, ".md"));
-      } else if (hasExtCI(item.name, ".mp3") && fmOnSD) {
-        btAudioPlayPath(full);
+      } else if (node.depth > 0) {
+        for (int p = fmSel - 1; p >= 0; p--) {
+          if (appScratch.files.tree[p].depth < node.depth) {
+            fmSel = p;
+            break;
+          }
+        }
+      }
+    } else if (k == KEY_RIGHT) {
+      const FileTreeNode &node = appScratch.files.tree[fmSel];
+      if (node.isDir && !node.expanded) {
+        toggleDirExpanded(node.fullPath);
+        appFilesRefresh();
+      }
+    } else if (k == '\n') {
+      const FileTreeNode &node = appScratch.files.tree[fmSel];
+      if (node.isDir) {
+        toggleDirExpanded(node.fullPath);
+        appFilesRefresh();
+      } else if (hasExtCI(node.name, ".bas")) {
+        appBasicLoadAndRun(fmOnSD, node.fullPath);
+      } else if (isTextEditable(node.name)) {
+        appNotesOpenFile(fmOnSD, node.fullPath, APP_FILES, hasExtCI(node.name, ".md"));
+      } else if (hasExtCI(node.name, ".mp3") && fmOnSD) {
+        btAudioPlayPath(node.fullPath);
         showToast(tr("Playing MP3...", "Odtwarzam MP3..."));
       } else {
         showToast(tr("Unsupported file", "Nieobslugiwany format"));
@@ -133,38 +217,60 @@ static void filesDraw() {
   rysujPasekStanu();
   d.setFont(u8g2_font_5x7_tr);
 
-  char hdr[28];
-  snprintf(hdr, sizeof(hdr), "%s:%.21s", fmOnSD ? "SD" : "FL", fmPath);
-  d.drawStr(2, 18, hdr);
+  if (fmOnSD) rysujIkoneKartaSD(2, 11);
+  else        rysujIkoneCzip(2, 11);
+  char hdr[24];
+  snprintf(hdr, sizeof(hdr), "%s (%d)", fmOnSD ? "SD:" : "FL:", fmCount);
+  d.drawStr(11, 18, hdr);
   d.drawHLine(0, 20, 128);
 
   if (fmCount == 0) {
     d.drawStr(4, 34, (fmOnSD && !sdMounted)
                      ? tr("No SD card!", "Brak karty SD!")
-                     : tr("(Empty folder)", "(Pusty katalog)"));
+                     : tr("(Empty drive)", "(Pusty dysk)"));
   } else {
-    int startIdx = max(0, min(fmSel - 1, fmCount - 3));
-    for (int i = 0; i < 3 && (startIdx + i) < fmCount; i++) {
+    int startIdx = max(0, min(fmSel - 1, fmCount - 4));
+    for (int i = 0; i < 4 && (startIdx + i) < fmCount; i++) {
       int idx = startIdx + i;
-      int y = 22 + i * 10;
-      const DirEntryInfo &item = appScratch.files.items[idx];
-      char line[28];
-      if (item.isDir) {
-        snprintf(line, sizeof(line), "[%.22s]", item.name);
-      } else {
-        snprintf(line, sizeof(line), "%-18.18s %luB", item.name, (unsigned long)item.size);
-      }
+      int y = 21 + i * 8;
+      const FileTreeNode &node = appScratch.files.tree[idx];
+
       if (idx == fmSel) {
-        d.drawBox(0, y, 128, 9);
-        d.setDrawColor(0); d.drawStr(2, y + 7, line); d.setDrawColor(1);
-      } else {
-        d.drawStr(2, y + 7, line);
+        d.drawBox(0, y, 128, 8);
+        d.setDrawColor(0);
       }
+
+      // Rysuj pionowe gałęzie przodków |
+      for (uint8_t lv = 0; lv < node.depth; lv++) {
+        if (node.contMask & (1U << lv)) {
+          d.drawVLine(3 + lv * 10, y, 8);
+        }
+      }
+
+      // Rysuj łącznik |--- dla bieżącego węzła
+      int cx = 3 + node.depth * 10;
+      d.drawVLine(cx, y, node.isLast ? 5 : 8);
+      d.drawHLine(cx, y + 4, 5);
+
+      // Ikona (Folder / Muzyka / Plik)
+      int ix = cx + 6;
+      if (node.isDir)                        rysujIkoneFolder(ix, y + 1);
+      else if (hasExtCI(node.name, ".mp3"))  rysujIkoneMuzyka(ix, y + 1);
+      else                                   rysujIkonePlik(ix, y + 1);
+
+      int tx = ix + 9;
+      int maxChars = max(4, (127 - tx) / 5);
+      char line[24];
+      if (node.isDir) snprintf(line, sizeof(line), "%.*s/", maxChars - 1, node.name);
+      else            snprintf(line, sizeof(line), "%.*s",  maxChars, node.name);
+      d.drawStr(tx, y + 7, line);
+
+      d.setDrawColor(1);
     }
   }
 
   d.drawHLine(0, 53, 128);
-  d.drawStr(2, 62, tr("Tab:Drv N:New F1:Help", "Tab:Dysk N:Nowy F1:Pom"));
+  d.drawStr(2, 62, tr("Tab:Drv </>:Tree F1:Help", "Tab:Dysk </>:Drz F1:Pom"));
 
   if (modalGetMode() != MODAL_NONE) rysujModal();
   rysujToastJesliAktywny();
@@ -172,21 +278,21 @@ static void filesDraw() {
 }
 
 static const char* const HELP_FILES_EN[] = {
-  "^ / v: Select item",
-  "Enter: Open / Play MP3",
-  "Tab: Switch Flash / SD",
+  "^ / v: Select node",
+  "Ent / >: Expand / Open",
+  "<: Collapse / Parent",
+  "Tab: Switch SD / Flash",
   "N or F2: New .md file",
-  "R: Refresh / Mount SD",
-  "Del: Delete | Bksp: Up",
+  "R: Mount SD | Del: Del",
   "Esc: Main menu"
 };
 static const char* const HELP_FILES_PL[] = {
-  "^ / v: Wybor pliku/kat.",
-  "Enter: Otworz / Graj MP3",
-  "Tab: Zmien Flash / SD",
+  "^ / v: Wybor elementu",
+  "Ent / >: Rozwin / Otworz",
+  "<: Zwin / Katalog wyzej",
+  "Tab: Zmien SD / Flash",
   "N lub F2: Nowy plik .md",
-  "R: Odswiez / montuj SD",
-  "Del: Usun | Bksp: Wstecz",
+  "R: Montuj SD | Del: Usun",
   "Esc: Menu glowne"
 };
 

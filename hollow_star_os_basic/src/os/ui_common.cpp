@@ -354,3 +354,45 @@ void uiFinishFrame() {
   if (helpOpen) rysujHelpOverlay();
   uiDisplay().sendBuffer();
 }
+
+void rysujIkoneFolder(int x, int y) {
+  U8G2 &d = uiDisplay();
+  d.drawBox(x, y, 3, 1);
+  d.drawFrame(x, y + 1, 7, 5);
+}
+
+void rysujIkonePlik(int x, int y) {
+  U8G2 &d = uiDisplay();
+  d.drawFrame(x, y, 6, 7);
+  d.drawHLine(x + 1, y + 2, 3);
+  d.drawHLine(x + 1, y + 4, 4);
+}
+
+void rysujIkoneMuzyka(int x, int y) {
+  U8G2 &d = uiDisplay();
+  d.drawHLine(x + 2, y, 5);
+  d.drawVLine(x + 2, y, 5);
+  d.drawVLine(x + 6, y, 5);
+  d.drawBox(x,     y + 4, 3, 3);
+  d.drawBox(x + 4, y + 4, 3, 3);
+}
+
+void rysujIkoneCzip(int x, int y) {
+  U8G2 &d = uiDisplay();
+  d.drawFrame(x + 1, y + 1, 5, 5);
+  d.drawPixel(x + 3, y + 3);
+  d.drawPixel(x,     y + 2); d.drawPixel(x,     y + 4);
+  d.drawPixel(x + 6, y + 2); d.drawPixel(x + 6, y + 4);
+  d.drawPixel(x + 2, y);     d.drawPixel(x + 4, y);
+  d.drawPixel(x + 2, y + 6); d.drawPixel(x + 4, y + 6);
+}
+
+void rysujIkoneKartaSD(int x, int y) {
+  U8G2 &d = uiDisplay();
+  d.drawHLine(x + 1, y, 5);
+  d.drawVLine(x,     y + 1, 6);
+  d.drawVLine(x + 5, y,     7);
+  d.drawHLine(x,     y + 6, 6);
+  d.drawVLine(x + 2, y + 2, 2);
+  d.drawVLine(x + 4, y + 2, 2);
+}

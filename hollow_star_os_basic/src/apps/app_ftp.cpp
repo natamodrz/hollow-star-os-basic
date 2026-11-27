@@ -86,11 +86,13 @@ static void ftpDraw() {
   d.drawStr(2, 17, tr("FTP SERVER (PASV :21)", "SERWER FTP (PASV :21)"));
   char buf[28];
   if (ftpDriveSD) {
+    rysujIkoneKartaSD(2, 20);
     snprintf(buf, sizeof(buf), "%s<SD Card> %s", tr("Drv:", "Dysk:"), sdMounted ? "OK" : tr("NO", "BRAK"));
   } else {
+    rysujIkoneCzip(2, 20);
     snprintf(buf, sizeof(buf), "%s<Flash LittleFS>", tr("Drv:", "Dysk:"));
   }
-  d.drawStr(2, 26, buf);
+  d.drawStr(11, 26, buf);
 
   if (netSnap.wifiConnected) {
     snprintf(buf, sizeof(buf), "IP: %s", netSnap.ipStr);

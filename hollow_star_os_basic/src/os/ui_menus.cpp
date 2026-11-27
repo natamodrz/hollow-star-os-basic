@@ -15,9 +15,9 @@ static const char* PAGE0_NAMES_PL[6] = {
 };
 
 #if HSOS_HAS_WIRELESS
-static const char* PAGE1_NAMES_EN[3] = { "Files", "Tools",     "Suspend" };
-static const char* PAGE1_NAMES_PL[3] = { "Pliki", "Narzedzia", "Uspienie" };
-static const int PAGE1_COUNT = 3;
+static const char* PAGE1_NAMES_EN[4] = { "Files", "Tools",     "TinyBASIC", "Suspend" };
+static const char* PAGE1_NAMES_PL[4] = { "Pliki", "Narzedzia", "TinyBASIC", "Uspienie" };
+static const int PAGE1_COUNT = 4;
 
 static const char* SETTINGS_NAMES_EN[7] = {
   "Bluetooth", "Wi-Fi / NTP", "Contrast", "Time",
@@ -30,9 +30,9 @@ static const char* SETTINGS_NAMES_PL[7] = {
 static const int SETTINGS_COUNT = 7;
 static const int SETTINGS_COLS  = 4;
 #else
-static const char* PAGE1_NAMES_EN[2] = { "Files", "Suspend" };
-static const char* PAGE1_NAMES_PL[2] = { "Pliki", "Uspienie" };
-static const int PAGE1_COUNT = 2;
+static const char* PAGE1_NAMES_EN[3] = { "Files", "TinyBASIC", "Suspend" };
+static const char* PAGE1_NAMES_PL[3] = { "Pliki", "TinyBASIC", "Uspienie" };
+static const int PAGE1_COUNT = 3;
 
 static const char* SETTINGS_NAMES_EN[5] = {
   "Contrast", "Time", "Language", "Format", "About"
@@ -108,6 +108,18 @@ static void rysujIkoneSleep(int cx, int cy) {
   d.drawBox(cx - 1, cy - 7, 3, 7);
 }
 
+static void rysujIkoneTinyBasic(int cx, int cy) {
+  U8G2 &d = uiDisplay();
+  d.drawFrame(cx - 7, cy - 6, 15, 12);
+  // Sharp ">_" prompt
+  d.drawPixel(cx - 5, cy - 2);
+  d.drawPixel(cx - 4, cy - 1);
+  d.drawPixel(cx - 3, cy);
+  d.drawPixel(cx - 4, cy + 1);
+  d.drawPixel(cx - 5, cy + 2);
+  d.drawHLine(cx - 1, cy + 2, 5);
+}
+
 static void rysujIkonePage1(int idx, int cx, int cy) {
   U8G2 &d = uiDisplay();
   if (idx == 0) { // Files
@@ -117,16 +129,17 @@ static void rysujIkonePage1(int idx, int cx, int cy) {
 #if HSOS_HAS_WIRELESS
   } else if (idx == 1) { // Tools
     d.drawFrame(cx - 7, cy - 6, 15, 12);
-    d.drawPixel(cx - 4, cy - 2);
-    d.drawPixel(cx - 3, cy - 1);
-    d.drawPixel(cx - 2, cy);
-    d.drawPixel(cx - 3, cy + 1);
-    d.drawPixel(cx - 4, cy + 2);
-    d.drawHLine(cx, cy + 2, 5);
+    d.drawHLine(cx - 5, cy - 3, 11);
+    d.drawBox(cx - 4, cy, 3, 3);
+    d.drawHLine(cx + 1, cy + 1, 4);
+  } else if (idx == 2) { // TinyBASIC
+    rysujIkoneTinyBasic(cx, cy);
   } else {
     rysujIkoneSleep(cx, cy);
   }
 #else
+  } else if (idx == 1) { // TinyBASIC
+    rysujIkoneTinyBasic(cx, cy);
   } else {
     rysujIkoneSleep(cx, cy);
   }
@@ -270,23 +283,26 @@ static void mainDraw() {
 
   for (int i = 0; i < count; i++) {
     int col = i % 3, row = i / 3;
-#if HSOS_HAS_WIRELESS
     int x = 3 + col * 42;
     int w = 38;
-#else
-    int x = (mainPage == 0) ? (3 + col * 42) : (14 + col * 54);
-    int w = (mainPage == 0) ? 38 : 46;
-#endif
     int y = 11 + row * 21;
     drawTile(x, y, w, 19, i == wybranaMain, (mainPage == 0) ? rysujIkonePage0 : rysujIkonePage1, i);
   }
 
   if (mainPage == 1) {
-    d.drawFrame(3, 33, 122, 17);
+#if HSOS_HAS_WIRELESS
+    d.drawFrame(45, 32, 80, 19);
+    rysujHollowStar(54, 41, true);
+    d.setFont(u8g2_font_5x7_tr);
+    d.drawStr(64, 40, "Hollow Star");
+    d.drawStr(64, 48, HSOS_BOARD_TAG " " OS_BRAND_VERSION);
+#else
+    d.drawFrame(3, 32, 122, 19);
     rysujHollowStar(13, 41, true);
     d.setFont(u8g2_font_5x7_tr);
-    d.drawStr(24, 41, OS_BRAND_NAME);
+    d.drawStr(24, 40, OS_BRAND_NAME);
     d.drawStr(24, 48, HSOS_BOARD_TAG " " OS_BRAND_VERSION);
+#endif
   }
 
   const char* appName = (mainPage == 0)
@@ -342,14 +358,21 @@ static bool mainKey(uint8_t k) {
   } else if (k == KEY_RIGHT) {
     if (wybranaMain >= PAGE1_COUNT - 1) { mainPage = 0; wybranaMain = 0; }
     else wybranaMain++;
+  } else if (k == KEY_UP || k == KEY_DOWN) {
+    if (PAGE1_COUNT > 3) {
+      if (wybranaMain >= 3) wybranaMain = 0;
+      else wybranaMain = 3;
+    }
   } else if (k == '\n' || k == ' ') {
 #if HSOS_HAS_WIRELESS
     if (wybranaMain == 0)      { appFilesResetRoot(); uiSetScreen(APP_FILES); }
     else if (wybranaMain == 1) uiSetScreen(APP_TOOLS_MENU);
-    else if (wybranaMain == 2) osEnterSuspend();
+    else if (wybranaMain == 2) uiSetScreen(APP_BASIC);
+    else if (wybranaMain == 3) osEnterSuspend();
 #else
     if (wybranaMain == 0)      { appFilesResetRoot(); uiSetScreen(APP_FILES); }
-    else if (wybranaMain == 1) osEnterSuspend();
+    else if (wybranaMain == 1) uiSetScreen(APP_BASIC);
+    else if (wybranaMain == 2) osEnterSuspend();
 #endif
   }
   return true;

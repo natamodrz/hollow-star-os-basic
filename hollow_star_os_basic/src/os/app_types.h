@@ -21,6 +21,7 @@ enum AppState : uint8_t {
   APP_FILES,
   APP_TOOLS_MENU,
   APP_FTP,
+  APP_BASIC,
   APP_SUSPEND,
   // Gry / Games
   APP_BRICK,
