@@ -45,3 +45,11 @@ Current resource constraints: **~71% Flash used (1 MB sketch partition)**, tight
 - Always run `./pico.sh build` after code changes to verify zero compilation errors and check Flash/RAM usage before flashing.
 
 ## Imprtant! Always read folder_structure.txt for the planned directory layout and keep it updated when adding new top-level modules.
+
+## Constant Ecosystem Sync Rule (ZASADA STAŁEJ SYNCHRONIZACJI — BASIC)
+Before **EVERY** task in `/Users/nataniel/project/hollow-star-os-basic` (before writing code, changing UX/features, or cutting a release):
+1. **Read Global Memory:** Automatically read `/Users/nataniel/project/memory/INDEX.md`, `CONVENTIONS.md`, `FEATURES_AND_UX.md` (and sibling `PROJECT_PLUS.md` / `PROJECT_STANDARD.md` when touching shared features or conventions).
+   - Per `FEATURES_AND_UX.md`, **only `Hollow Star OS Basic`** preserves the retro monochrome look (`128x64` ST7565 LCD on RP2040), while shared feature flows (i18n `EN`/`PL`, `1st Setup`, `F1` help, hiding Wi-Fi/BT on standard Pico) and repo hygiene (`CONVENTIONS.md`) stay aligned.
+2. **Read Edition Memory & Local Rules:** Automatically read `/Users/nataniel/project/memory/PROJECT_BASIC.md` and this `AGENTS.md`.
+3. **Check Bugs & Demo Photos:** Inspect `/Users/nataniel/project/bugs/hollow-star-os-basic/` (move verified & fixed bug reports into `/Users/nataniel/project/bugs/hollow-star-os-basic/resolved/`) and `/Users/nataniel/project/demo photos/hollow-star-os-basic/`.
+4. **Update Memory Directly on Completion:** After finishing work, update `/Users/nataniel/project/memory/PROJECT_BASIC.md` directly (and `FEATURES_AND_UX.md` if the shared feature scope changed). **Do NOT generate manual `[SYNC MEMORY]` prompts at the end of responses** — every agent reads shared memory automatically at task start.
